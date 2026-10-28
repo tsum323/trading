@@ -78,10 +78,10 @@ npm run ingest -- --symbol BTC/USDT --timeframe 15m --from 2023-12-01 --to 2024-
 npm run backtest -- --symbol BTC/USDT --from 2024-01-01 --to 2024-07-01
 ```
 
-Прогон стратегии `trend-pullback` (`docs/strategy-spec.md`) по свечам из базы:
+Прогон стратегии (`--strategy trend-pullback` или `donchian-breakout`, по умолчанию первая) по свечам из базы:
 сигналы, исходы по правилам `docs/validation-plan.md` §3, матожидание в R с
 95% интервалом (блоковый бутстреп по дням), сравнение с 1000 случайными
-входами и проверка критериев отказа. Нужен прогрев 30 дней до `--from`.
+входами и проверка критериев отказа. Нужен прогрев до `--from`: 30 дней для trend-pullback, ~42 дня для donchian-breakout.
 Параметры: `--db`, `--source` (по умолчанию `binance-spot`), `--runs`,
 `--seed` (одинаковое зерно — одинаковый отчёт).
 
@@ -90,7 +90,7 @@ npm run backtest -- --symbol BTC/USDT --from 2024-01-01 --to 2024-07-01
 
 ### На GitHub Actions (по кнопке)
 
-Actions → **Research backtest** → Run workflow, выбрать часть: `research`,
+Actions → **Research backtest** → Run workflow, выбрать стратегию и часть: `research`,
 `validation` или `holdout`. Workflow загружает историю BTC/USDT и ETH/USDT с
 Binance, прогоняет стратегию на выбранной части разбиения 60/20/20 и
 сохраняет в ветку `data`:
@@ -104,7 +104,7 @@ reports/research/*.md      отчёт каждого прогона
 Отчёт также показывается на странице запуска (Summary). Порядок: сначала
 `research`, затем `validation`; `holdout` — один раз для зафиксированной
 версии стратегии, повторный запуск будет отклонён. Локально:
-`npm run research -- --archive <каталог> --segment research`.
+`npm run research -- --archive <каталог> --strategy donchian-breakout --segment research`.
 
 ## Перспективный тест (автоматически)
 
@@ -149,7 +149,8 @@ scripts/research.ts    прогон на части разбиения
 scripts/*-data.sh      подключение и коммит ветки data в workflow
 docs/
   architecture.md      компоненты, поток данных, форматы хранения
-  strategy-spec.md     первая исследовательская гипотеза
+  strategy-spec.md     trend-pullback (15m) — отвергнута
+  strategy-donchian-breakout.md  donchian-breakout (1h) — зафиксирована до прогона
   validation-plan.md   правила исторического и перспективного тестирования
 ```
 

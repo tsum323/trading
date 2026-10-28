@@ -1,6 +1,6 @@
 name: Research backtest
 
-# Исторический прогон trend-pullback на одной части зафиксированного разбиения
+# Исторический прогон стратегии на одной части зафиксированного разбиения
 # 60/20/20 (docs/validation-plan.md §2). Запускается только вручную.
 # Разбиение создаётся при первом запуске и хранится в research/split.json ветки `data`;
 # каждый прогон дописывается в research/journal.jsonl. Отложенная часть (holdout)
@@ -9,6 +9,11 @@ name: Research backtest
 on:
   workflow_dispatch:
     inputs:
+      strategy:
+        description: "Стратегия"
+        type: choice
+        options: [donchian-breakout, trend-pullback]
+        default: donchian-breakout
       segment:
         description: "Часть разбиения"
         type: choice
@@ -46,11 +51,12 @@ jobs:
 
       - name: Run backtest
         run: |
-          args=(--archive archive --segment "$SEGMENT" --symbols "$SYMBOLS")
+          args=(--archive archive --strategy "$STRATEGY" --segment "$SEGMENT" --symbols "$SYMBOLS")
           if [ -n "$FROM" ]; then args+=(--from "$FROM"); fi
           if [ -n "$TO" ]; then args+=(--to "$TO"); fi
           npm run research -- "${args[@]}"
         env:
+          STRATEGY: ${{ inputs.strategy }}
           SEGMENT: ${{ inputs.segment }}
           SYMBOLS: ${{ inputs.symbols }}
           FROM: ${{ inputs.from }}
@@ -58,6 +64,7 @@ jobs:
 
       - name: Commit and push
         run: |
-          scripts/commit-data.sh archive "research: $SEGMENT $(date -u +%Y-%m-%dT%H:%MZ) (code ${GITHUB_SHA::7})"
+          scripts/commit-data.sh archive "research: $STRATEGY $SEGMENT $(date -u +%Y-%m-%dT%H:%MZ) (code ${GITHUB_SHA::7})"
         env:
+          STRATEGY: ${{ inputs.strategy }}
           SEGMENT: ${{ inputs.segment }}

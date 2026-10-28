@@ -16,6 +16,7 @@ import type { Strategy } from "@/modules/strategies";
 import { ingestHistory } from "./ingest-history";
 
 const DAY = 86_400_000;
+const NO_COSTS = { feeRate: 0, slippage: 0 };
 
 export const SEGMENTS = ["research", "validation", "holdout"] as const;
 export type Segment = (typeof SEGMENTS)[number];
@@ -67,6 +68,8 @@ export interface JournalEntry {
   trades: number;
   expectancyR: number;
   ci95: [number, number] | null;
+  /** Матожидание без издержек (диагностика); в старых записях может отсутствовать. */
+  grossExpectancyR?: number;
   baselineP95: number;
   verdict: VerdictReport["verdict"];
   checks: CheckResult[];
@@ -99,6 +102,8 @@ export interface SymbolResearch {
   /** Сделки, не завершившиеся до конца части, — не учитываются (данные после неё не читаются). */
   pending: number;
   stats: TradeStats;
+  /** Диагностика: те же сделки без комиссий и проскальзывания — отделяет логику входа от издержек. */
+  grossStats: TradeStats;
 }
 
 export interface ResearchResult {
@@ -108,6 +113,7 @@ export interface ResearchResult {
   range: { from: UnixMs; to: UnixMs };
   perSymbol: SymbolResearch[];
   stats: TradeStats;
+  grossStats: TradeStats;
   baseline: BaselineResult;
   topSymbolShare: number | null;
   report: VerdictReport;
@@ -142,6 +148,7 @@ export async function runResearch(opts: ResearchOptions): Promise<ResearchResult
 
   const perSymbol: SymbolResearch[] = [];
   const outcomes: SignalOutcome[] = [];
+  const gross: SignalOutcome[] = [];
   const baselines: BaselineResult[] = [];
   const totalBySymbol: number[] = [];
 
@@ -155,6 +162,8 @@ export async function runResearch(opts: ResearchOptions): Promise<ResearchResult
     const symbolOutcomes = result.trades.map((t) => t.outcome);
     const stats = summarize(symbolOutcomes, { seed });
     outcomes.push(...symbolOutcomes);
+    const grossOutcomes = runBacktest(strategy, candles, { from: range.from, costs: NO_COSTS }).trades.map((t) => t.outcome);
+    gross.push(...grossOutcomes);
     baselines.push(randomBaseline(result.trades, candles, { runs, seed: seed + k, from: range.from }));
     totalBySymbol.push(stats.totalR);
     perSymbol.push({
@@ -165,14 +174,16 @@ export async function runResearch(opts: ResearchOptions): Promise<ResearchResult
       skippedOverlap: result.skippedOverlap,
       pending: result.pending,
       stats,
+      grossStats: summarize(grossOutcomes, { seed }),
     });
   }
 
   const stats = summarize(outcomes, { seed });
+  const grossStats = summarize(gross, { seed });
   const baseline = combineBaselines(baselines);
   const topSymbolShare = stats.totalR > 0 ? Math.max(...totalBySymbol) / stats.totalR : null;
   const report = judge(stats, baseline, symbols.length > 1 ? { topSymbolShare } : undefined);
-  return { strategyId: strategy.id, strategyVersion: strategy.version, segment, range, perSymbol, stats, baseline, topSymbolShare, report };
+  return { strategyId: strategy.id, strategyVersion: strategy.version, segment, range, perSymbol, stats, grossStats, baseline, topSymbolShare, report };
 }
 
 export function journalEntry(r: ResearchResult, meta: { at: UnixMs; codeCommit: string | null; seed: number; runs: number }): JournalEntry {
@@ -190,6 +201,7 @@ export function journalEntry(r: ResearchResult, meta: { at: UnixMs; codeCommit: 
     trades: r.stats.trades,
     expectancyR: r.stats.expectancyR,
     ci95: r.stats.ci95,
+    grossExpectancyR: r.grossStats.expectancyR,
     baselineP95: r.baseline.p95,
     verdict: r.report.verdict,
     checks: r.report.checks,
@@ -213,11 +225,11 @@ export function renderResearchReport(r: ResearchResult, plan: SplitPlan, journal
     "",
     "## По символам",
     "",
-    "| Символ | Свечей | Пропуски | Сигналов | Пропущено (открыт другой) | Не завершились | Сделок | Матожидание, R | Итого, R |",
-    "|---|---|---|---|---|---|---|---|---|",
+    "| Символ | Свечей | Пропуски | Сигналов | Пропущено (открыт другой) | Не завершились | Сделок | Матожидание, R | Без издержек, R | Итого, R |",
+    "|---|---|---|---|---|---|---|---|---|---|",
     ...r.perSymbol.map(
       (s) =>
-        `| ${s.symbol} | ${s.candles} | ${s.gaps.reduce((a, g) => a + g.missing, 0)} | ${s.signals} | ${s.skippedOverlap} | ${s.pending} | ${s.stats.trades} | ${r3(s.stats.expectancyR)} | ${r3(s.stats.totalR)} |`,
+        `| ${s.symbol} | ${s.candles} | ${s.gaps.reduce((a, g) => a + g.missing, 0)} | ${s.signals} | ${s.skippedOverlap} | ${s.pending} | ${s.stats.trades} | ${r3(s.stats.expectancyR)} | ${r3(s.grossStats.expectancyR)} | ${r3(s.stats.totalR)} |`,
     ),
     "",
     "## Итог по всем символам",
@@ -226,6 +238,8 @@ export function renderResearchReport(r: ResearchResult, plan: SplitPlan, journal
     `- Сделок: ${r.stats.trades}, итого ${r3(r.stats.totalR)} R, матожидание ${r3(r.stats.expectancyR)} R` +
       (r.stats.ci95 ? `, 95% CI [${r3(r.stats.ci95[0])}, ${r3(r.stats.ci95[1])}]` : ""),
     `- Win rate ${r3(r.stats.winRate)}, средний выигрыш ${r3(r.stats.avgWinR)} R, средний проигрыш ${r3(r.stats.avgLossR)} R, PF ${r3(r.stats.profitFactor)}`,
+    `- Без издержек (диагностика, не критерий): матожидание ${r3(r.grossStats.expectancyR)} R` +
+      (r.grossStats.ci95 ? `, 95% CI [${r3(r.grossStats.ci95[0])}, ${r3(r.grossStats.ci95[1])}]` : ""),
     `- Макс. просадка ${r3(r.stats.maxDrawdownR)} R`,
     `- Случайные входы: ${r.baseline.runs} прогонов, медиана ${r3(r.baseline.p50)} R, p95 ${r3(r.baseline.p95)} R`,
     "",
@@ -237,8 +251,10 @@ export function renderResearchReport(r: ResearchResult, plan: SplitPlan, journal
     "",
     "## Журнал исследований",
     "",
-    `Всего прогонов этой стратегии: ${journal.filter((e) => e.strategyId === r.strategyId).length} ` +
-      `(versions: ${[...new Set(journal.filter((e) => e.strategyId === r.strategyId).map((e) => e.strategyVersion))].join(", ")}). ` +
+    `Прогонов этой стратегии: ${journal.filter((e) => e.strategyId === r.strategyId).length} ` +
+      `(версии: ${[...new Set(journal.filter((e) => e.strategyId === r.strategyId).map((e) => e.strategyVersion))].join(", ")}). ` +
+      `Всего в журнале: ${journal.length} прогонов, ` +
+      `${new Set(journal.map((e) => `${e.strategyId}@${e.strategyVersion}`)).size} конфигураций. ` +
       "Число испробованных конфигураций учитывается при оценке (validation-plan §5).",
   ];
   return `${lines.join("\n")}\n`;

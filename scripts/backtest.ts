@@ -1,17 +1,17 @@
 /**
- * Исторический прогон trend-pullback по свечам из локальной SQLite.
+ * Исторический прогон стратегии по свечам из локальной SQLite.
  *
- *   npm run backtest -- --symbol BTC/USDT --from 2024-01-01 --to 2024-07-01
+ *   npm run backtest -- --strategy trend-pullback --symbol BTC/USDT --from 2024-01-01 --to 2024-07-01
  *
- * Свечи 15m должны быть загружены заранее (npm run ingest) с запасом на прогрев:
- * 30 дней до --from. Сигналы до --from не учитываются.
+ * Свечи таймфрейма стратегии должны быть загружены заранее (npm run ingest) с запасом
+ * на прогрев (strategy.warmup свечей до --from). Сигналы до --from не учитываются.
  */
 import { parseArgs } from "node:util";
 import { TIMEFRAME_MS } from "@/core/time";
 import { DEFAULT_COSTS, judge, randomBaseline, runBacktest, summarize } from "@/modules/backtest";
 import { BinanceSpotSource } from "@/modules/market-data";
 import { SqliteStore } from "@/modules/storage";
-import { trendPullback } from "@/modules/strategies/trend-pullback";
+import { getStrategy } from "@/modules/strategies/registry";
 
 function parseDate(name: string, value: string): number {
   const t = Date.parse(/^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T00:00:00Z` : value);
@@ -25,6 +25,7 @@ const r3 = (x: number) => (Number.isFinite(x) ? x.toFixed(3) : String(x));
 function main() {
   const { values } = parseArgs({
     options: {
+      strategy: { type: "string", default: "trend-pullback" },
       symbol: { type: "string" },
       from: { type: "string" },
       to: { type: "string" },
@@ -36,7 +37,7 @@ function main() {
   });
   if (!values.symbol || !values.from) throw new Error("Required: --symbol BASE/QUOTE --from <date> [--to <date>] [--db path]");
 
-  const strategy = trendPullback();
+  const strategy = getStrategy(values.strategy);
   const from = parseDate("from", values.from);
   const to = values.to ? parseDate("to", values.to) : Date.now();
   const warmupFrom = from - strategy.warmup * TIMEFRAME_MS[strategy.timeframe];
@@ -45,7 +46,7 @@ function main() {
   const candles = store.getCandles(values.source, { symbol: values.symbol, timeframe: strategy.timeframe, from: warmupFrom, to });
   store.close();
   if (candles.length < strategy.warmup) {
-    throw new Error(`Only ${candles.length} candles in DB for ${values.symbol} 15m from ${iso(warmupFrom)}; need >= ${strategy.warmup}. Run npm run ingest first.`);
+    throw new Error(`Only ${candles.length} candles in DB for ${values.symbol} ${strategy.timeframe} from ${iso(warmupFrom)}; need >= ${strategy.warmup}. Run npm run ingest first.`);
   }
 
   const result = runBacktest(strategy, candles, { from });
@@ -54,7 +55,7 @@ function main() {
   const report = judge(stats, baseline);
 
   console.log(`strategy:  ${result.strategyId}@${result.strategyVersion}`);
-  console.log(`data:      ${values.source} ${values.symbol} 15m, ${candles.length} candles ${iso(candles[0]!.openTime)} .. ${iso(result.asOf)}`);
+  console.log(`data:      ${values.source} ${values.symbol} ${strategy.timeframe}, ${candles.length} candles ${iso(candles[0]!.openTime)} .. ${iso(result.asOf)}`);
   console.log(`period:    signals from ${iso(from)}`);
   console.log(`costs:     fee ${DEFAULT_COSTS.feeRate * 100}%/side, slippage ${DEFAULT_COSTS.slippage * 100}%/side`);
   console.log(`signals:   ${result.signals.length} (skipped overlap ${result.skippedOverlap}, pending ${result.pending})`);
