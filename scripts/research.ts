@@ -1,8 +1,8 @@
 /**
- * Исторический прогон trend-pullback на одной части зафиксированного разбиения
+ * Исторический прогон стратегии (--strategy) на одной части зафиксированного разбиения
  * (docs/validation-plan.md §2). Запускается из .github/workflows/research.yml.
  *
- *   npm run research -- --archive <dir> --segment research
+ *   npm run research -- --archive <dir> --strategy donchian-breakout --segment research
  *
  * При первом запуске разбиение создаётся из --from/--to (по умолчанию — 24
  * месяца до начала текущего месяца) и сохраняется в research/split.json; дальше
@@ -13,7 +13,7 @@ import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { BinanceSpotSource } from "@/modules/market-data";
 import { FileArchive } from "@/modules/storage";
-import { trendPullback } from "@/modules/strategies/trend-pullback";
+import { getStrategy } from "@/modules/strategies/registry";
 import {
   assertHoldoutAllowed,
   journalEntry,
@@ -38,6 +38,7 @@ async function main() {
   const { values } = parseArgs({
     options: {
       archive: { type: "string" },
+      strategy: { type: "string", default: "trend-pullback" },
       segment: { type: "string", default: "research" },
       symbols: { type: "string", default: "BTC/USDT,ETH/USDT" },
       from: { type: "string" },
@@ -56,7 +57,7 @@ async function main() {
   const codeCommit = process.env.GITHUB_SHA ?? null;
 
   const archive = new FileArchive(values.archive);
-  const strategy = trendPullback();
+  const strategy = getStrategy(values.strategy);
   const symbols = values.symbols.split(",").map((s) => s.trim()).filter(Boolean);
 
   const splitPath = join(values.archive, SPLIT_FILE);

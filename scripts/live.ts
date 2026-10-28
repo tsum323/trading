@@ -9,7 +9,7 @@
 import { parseArgs } from "node:util";
 import { BinanceSpotSource } from "@/modules/market-data";
 import { FileArchive } from "@/modules/storage";
-import { trendPullback } from "@/modules/strategies/trend-pullback";
+import { getStrategy } from "@/modules/strategies/registry";
 import { runLiveCycle } from "@/services/live-cycle";
 import { renderLiveReport } from "@/services/live-report";
 
@@ -17,6 +17,7 @@ async function main() {
   const { values } = parseArgs({
     options: {
       archive: { type: "string" },
+      strategy: { type: "string", default: "trend-pullback" },
       symbols: { type: "string", default: "BTC/USDT,ETH/USDT" },
       "base-url": { type: "string" },
     },
@@ -24,7 +25,7 @@ async function main() {
   if (!values.archive) throw new Error("Required: --archive <dir> [--symbols A/B,C/D] [--base-url url]");
 
   const archive = new FileArchive(values.archive);
-  const strategy = trendPullback();
+  const strategy = getStrategy(values.strategy);
   const source = new BinanceSpotSource(values["base-url"] ? { baseUrl: values["base-url"] } : {});
   const symbols = values.symbols.split(",").map((s) => s.trim()).filter(Boolean);
 

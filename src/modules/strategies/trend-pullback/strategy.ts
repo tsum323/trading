@@ -2,6 +2,7 @@ import { TIMEFRAME_MS } from "@/core/time";
 import { atr, ema } from "@/modules/indicators";
 import { resample } from "@/modules/market-data";
 import type { SignalDraft, Strategy } from "../types";
+import { paramsVersion } from "../version";
 
 /** Параметры из docs/strategy-spec.md §4. */
 export interface TrendPullbackParams {
@@ -43,10 +44,7 @@ export const BASE_VERSION = "0.1.0";
 
 /** Версия включает отличия от параметров по умолчанию: разные наборы не смешиваются в статистике. */
 export function versionFor(params: TrendPullbackParams): string {
-  const diff = (Object.keys(DEFAULT_PARAMS) as (keyof TrendPullbackParams)[])
-    .filter((k) => params[k] !== DEFAULT_PARAMS[k])
-    .map((k) => `${k}=${params[k]}`);
-  return diff.length === 0 ? BASE_VERSION : `${BASE_VERSION}+${diff.join(",")}`;
+  return paramsVersion(BASE_VERSION, DEFAULT_PARAMS, params);
 }
 
 /**

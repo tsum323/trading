@@ -71,7 +71,7 @@
 | `core` | время (UTC ms), таймфреймы | — | — |
 | `market-data` | тип `Candle`, интерфейс `MarketDataSource`, валидация свечей и рядов | не хранит, не заполняет пропуски, не принимает ключи | core |
 | `indicators` | чистые функции `Candle[] → (number\|null)[]`: SMA, EMA, ATR | не обращается к сети/БД, не видит время решения | market-data (типы) |
-| `strategies` | интерфейс `Strategy`, типы сигналов, `validateSignal`; реализации: `trend-pullback` | не получает данные сам, не исполняет сделки | market-data, indicators |
+| `strategies` | интерфейс `Strategy`, типы сигналов, `validateSignal`; реализации: `trend-pullback` (15m), `donchian-breakout` (1h); выбор по id — `strategies/registry.ts` | не получает данные сам, не исполняет сделки | market-data, indicators |
 | `risk` | размер позиции, риск на сделку, ограничения | не знает о реальном счёте | strategies (типы) |
 | `backtest` | срез «на момент», реплей, оценка исходов (`evaluateSignal`), прогон с правилом одного открытого сигнала (`runBacktest`), статистика и бутстреп (`summarize`), случайная базовая линия (`randomBaseline`), критерии отказа (`judge`) | не подгружает данные сам | market-data, strategies, risk |
 | `ai-analysis` | интерфейс `MarketExplainer` | не создаёт и не меняет сигналы, не участвует в бэктесте | strategies (типы) |
