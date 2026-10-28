@@ -4,7 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import type { Timeframe } from "@/core/time";
 import type { SignalOutcome } from "@/modules/backtest";
 import type { Candle } from "@/modules/market-data";
-import type { Overview } from "@/app/api/overview/route";
+import { DataBranchReader } from "@/services/data-branch";
+import { loadOverview, type Overview } from "@/services/overview";
+import { loadCandles, type CandleLoad } from "./data";
 import type { TradingSignal } from "@/modules/strategies";
 import { CandleChart } from "./CandleChart";
 import { fmtDay, fmtNum, fmtPct, fmtPrice, fmtR, fmtTime } from "./format";
@@ -24,14 +26,12 @@ import { configurationKey } from "@/services/journal-key";
 const REFRESH_MS = 30_000;
 const NO_CANDLES: Candle[] = [];
 
-interface CandleData {
-  candles: Candle[];
+interface CandleData extends CandleLoad {
   /** Только закрытые свечи; тот же массив, пока не закрылась новая — индикаторы и реплей не пересчитываются зря. */
   closed: Candle[];
-  fetchedAt: number;
 }
 
-function withStableClosed(body: { candles: Candle[]; fetchedAt: number }, prev: CandleData | null): CandleData {
+function withStableClosed(body: CandleLoad, prev: CandleData | null): CandleData {
   const closed = body.candles.filter((c) => c.isClosed);
   const same =
     prev !== null &&
@@ -40,7 +40,7 @@ function withStableClosed(body: { candles: Candle[]; fetchedAt: number }, prev: 
     prev.closed.at(-1)?.closeTime === closed.at(-1)?.closeTime &&
     prev.closed[0]?.symbol === closed[0]?.symbol &&
     prev.closed[0]?.timeframe === closed[0]?.timeframe;
-  return { candles: body.candles, closed: same ? prev.closed : closed, fetchedAt: body.fetchedAt };
+  return { ...body, closed: same ? prev.closed : closed };
 }
 
 type Load<T> = { state: "loading" } | { state: "error"; message: string } | { state: "ready"; data: T };
@@ -73,10 +73,7 @@ export function Terminal() {
     const load = async (first: boolean) => {
       if (first) setCandles({ state: "loading" });
       try {
-        const q = new URLSearchParams({ symbol, timeframe, count: String(candleCount(timeframe)) });
-        const res = await fetch(`/api/candles?${q}`, { signal: controller.signal });
-        const body = await res.json();
-        if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
+        const body = await loadCandles(symbol, timeframe, candleCount(timeframe), undefined, controller.signal);
         if (!cancelled) setCandles((prev) => ({ state: "ready", data: withStableClosed(body, prev.state === "ready" ? prev.data : null) }));
       } catch (e) {
         if (!cancelled && !controller.signal.aborted && first) setCandles({ state: "error", message: e instanceof Error ? e.message : String(e) });
@@ -92,12 +89,8 @@ export function Terminal() {
   }, [symbol, timeframe]);
 
   useEffect(() => {
-    fetch("/api/overview")
-      .then(async (res) => {
-        const body = await res.json();
-        if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
-        setOverview({ state: "ready", data: body });
-      })
+    loadOverview(new DataBranchReader(process.env.NEXT_PUBLIC_DATA_BRANCH_URL || undefined))
+      .then((data) => setOverview({ state: "ready", data }))
       .catch((e: unknown) => setOverview({ state: "error", message: e instanceof Error ? e.message : String(e) }));
   }, []);
 
@@ -161,8 +154,14 @@ export function Terminal() {
         <Stat label="За 24 часа" value={fmtPct(summary?.change24h)} tone={summary?.change24h == null ? undefined : summary.change24h >= 0 ? "up" : "down"} />
         <Stat label="ATR(14)" value={fmtPrice(summary?.atr14, summary?.lastClosed?.close)} sub={summary?.atrPct != null ? `${fmtNum(summary.atrPct * 100, 2)}% цены` : undefined} />
         <Stat label="Издержки при стопе 2·ATR" value={summary?.costR != null ? `≈ ${fmtNum(summary.costR, 2)} R` : "—"} sub="0.1% + 0.02% на сторону" />
-        <Stat label="Обновлено" value={candles.state === "ready" ? fmtTime(candles.data.fetchedAt) : "—"} sub="UTC, Binance Spot" />
+        <Stat
+          label="Обновлено"
+          value={candles.state === "ready" ? fmtTime(candles.data.fetchedAt) : "—"}
+          sub={candles.state === "ready" && candles.data.origin === "data-branch" ? "UTC, свечи из ветки data" : "UTC, Binance Spot"}
+        />
       </section>
+
+      {candles.state === "ready" && candles.data.notice && <p className="notice" role="status">{candles.data.notice}</p>}
 
       <section className="panel chart-panel" aria-label="График">
         {candles.state === "loading" && <div className="placeholder">Загрузка свечей…</div>}

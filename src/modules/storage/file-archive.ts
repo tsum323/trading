@@ -1,9 +1,8 @@
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { TIMEFRAME_MS, type Timeframe } from "@/core/time";
-import type { Candle, CandleQuery, MarketDataSourceId, MarketSymbol } from "@/modules/market-data";
+import type { Timeframe } from "@/core/time";
+import { CANDLE_CSV_HEADER, candleCsvPath, parseCandleCsv, type Candle, type CandleQuery, type MarketDataSourceId, type MarketSymbol } from "@/modules/market-data";
 
-const CSV_HEADER = "open_time,open,high,low,close,volume";
 
 /**
  * Текстовый архив для хранения в git (ветка `data`):
@@ -19,7 +18,7 @@ export class FileArchive {
   constructor(readonly root: string) {}
 
   private seriesDir(source: MarketDataSourceId, symbol: MarketSymbol, tf: Timeframe): string {
-    return join(this.root, "candles", source, symbol.replace("/", "-"), tf);
+    return dirname(join(this.root, candleCsvPath(source, symbol, tf, "x")));
   }
 
   private months(source: MarketDataSourceId, symbol: MarketSymbol, tf: Timeframe): string[] {
@@ -32,17 +31,9 @@ export class FileArchive {
   }
 
   private readMonth(source: MarketDataSourceId, symbol: MarketSymbol, tf: Timeframe, month: string): Candle[] {
-    const path = join(this.seriesDir(source, symbol, tf), `${month}.csv`);
+    const path = join(this.root, candleCsvPath(source, symbol, tf, month));
     if (!existsSync(path)) return [];
-    const size = TIMEFRAME_MS[tf];
-    return readFileSync(path, "utf8")
-      .split("\n")
-      .slice(1)
-      .filter((line) => line.length > 0)
-      .map((line) => {
-        const [t, o, h, l, c, v] = line.split(",").map(Number) as [number, number, number, number, number, number];
-        return { source, symbol, timeframe: tf, openTime: t, closeTime: t + size, open: o, high: h, low: l, close: c, volume: v, isClosed: true };
-      });
+    return parseCandleCsv(readFileSync(path, "utf8"), source, symbol, tf);
   }
 
   /**
@@ -66,7 +57,7 @@ export class FileArchive {
         .map((c) => [c.openTime, c.open, c.high, c.low, c.close, c.volume].join(","));
       const path = join(this.seriesDir(source, symbol, tf), `${month}.csv`);
       mkdirSync(dirname(path), { recursive: true });
-      writeFileSync(path, `${CSV_HEADER}\n${rows.join("\n")}\n`);
+      writeFileSync(path, `${CANDLE_CSV_HEADER}\n${rows.join("\n")}\n`);
     }
   }
 

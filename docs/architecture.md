@@ -80,11 +80,14 @@
 
 ### Интерфейс
 
-`src/app` — Next.js. Серверные маршруты: `/api/candles` (публичный API Binance
-через `BinanceSpotSource` + `fetchCandleRange`) и `/api/overview` (журнал и
-перспективный тест из ветки `data` через `DataBranchReader`). Логика экрана —
-чистые функции `app/terminal/model.ts` (индикаторы по закрытым свечам,
-отметки сигналов, реплей); компоненты только отображают.
+`src/app` — Next.js, собирается и как обычное приложение, и как статический
+сайт для GitHub Pages (`PAGES_BASE_PATH`). Серверных маршрутов нет: данные
+загружает браузер (`app/terminal/data.ts`) — свечи через `BinanceSpotSource` +
+`fetchCandleRange`, при недоступности Binance — реальные свечи из ветки `data`
+(`parseCandleCsv` + `resample`); журнал и перспективный тест — `loadOverview`
+через `DataBranchReader`. Логика экрана — чистые функции
+`app/terminal/model.ts` (индикаторы по закрытым свечам, отметки сигналов,
+реплей); компоненты только отображают.
 
 ### Источник данных: Binance Spot
 

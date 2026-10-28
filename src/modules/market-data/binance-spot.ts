@@ -58,7 +58,8 @@ export class BinanceSpotSource implements MarketDataSource {
 
   constructor(opts: BinanceSpotOptions = {}) {
     this.baseUrl = opts.baseUrl ?? BINANCE_PUBLIC_DATA_URL;
-    this.fetchImpl = opts.fetch ?? globalThis.fetch;
+    // Без bind браузер бросает «Illegal invocation» при вызове сохранённого fetch.
+    this.fetchImpl = opts.fetch ?? globalThis.fetch.bind(globalThis);
     this.now = opts.now ?? Date.now;
     this.clockSkewMs = opts.clockSkewMs ?? 2_000;
     this.timeoutMs = opts.timeoutMs ?? 15_000;
