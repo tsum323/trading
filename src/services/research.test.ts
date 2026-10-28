@@ -6,6 +6,7 @@ import type { Candle, MarketDataSource } from "@/modules/market-data";
 import { FileArchive } from "@/modules/storage";
 import type { Strategy } from "@/modules/strategies";
 import { FIXTURE_SOURCE } from "@/test/fixtures";
+import { configurationKey } from "./journal-key";
 import {
   assertHoldoutAllowed,
   HoldoutUsedError,
@@ -115,5 +116,13 @@ describe("runResearch", () => {
     await expect(
       runResearch({ source: flatSource(T0), archive: new FileArchive(dir), strategy: {} as Strategy, symbols: [], plan, segment: "holdout", now: () => T0 }),
     ).rejects.toThrow(/future/);
+  });
+});
+
+describe("configurationKey", () => {
+  it("distinguishes symbol sets and ignores their order", () => {
+    const base = { strategyId: "s", strategyVersion: "0.1.0" };
+    expect(configurationKey({ ...base, symbols: ["ETH/USDT", "BTC/USDT"] })).toBe(configurationKey({ ...base, symbols: ["BTC/USDT", "ETH/USDT"] }));
+    expect(configurationKey({ ...base, symbols: ["BTC/USDT"] })).not.toBe(configurationKey({ ...base, symbols: ["BTC/USDT", "ETH/USDT"] }));
   });
 });
