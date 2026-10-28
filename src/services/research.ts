@@ -12,7 +12,7 @@ import {
 } from "@/modules/backtest";
 import type { Gap, MarketDataSource, MarketSymbol } from "@/modules/market-data";
 import type { FileArchive } from "@/modules/storage";
-import type { Strategy } from "@/modules/strategies";
+import type { SignalDirection, Strategy } from "@/modules/strategies";
 import { ingestHistory } from "./ingest-history";
 import { configurationKey } from "./journal-key";
 
@@ -107,6 +107,26 @@ export interface SymbolResearch {
   grossStats: TradeStats;
 }
 
+/** Разбивка по направлению (validation-plan §4) со своей случайной базовой линией. */
+export interface DirectionBreakdown {
+  direction: SignalDirection;
+  stats: TradeStats;
+  grossExpectancyR: number;
+  /**
+   * Случайные входы только этого направления (те же стоп, цель, срок). Если
+   * стратегия не лучше их, результат объясняется движением рынка за период
+   * (например, общим ростом для long), а не правилом входа.
+   */
+  baseline: BaselineResult;
+}
+
+export interface MonthBreakdown {
+  month: string;
+  trades: number;
+  totalR: number;
+  expectancyR: number;
+}
+
 export interface ResearchResult {
   strategyId: string;
   strategyVersion: string;
@@ -118,6 +138,8 @@ export interface ResearchResult {
   baseline: BaselineResult;
   topSymbolShare: number | null;
   report: VerdictReport;
+  byDirection: DirectionBreakdown[];
+  byMonth: MonthBreakdown[];
 }
 
 export interface ResearchOptions {
@@ -152,6 +174,10 @@ export async function runResearch(opts: ResearchOptions): Promise<ResearchResult
   const gross: SignalOutcome[] = [];
   const baselines: BaselineResult[] = [];
   const totalBySymbol: number[] = [];
+  const directionTrades: Record<SignalDirection, { net: SignalOutcome[]; gross: SignalOutcome[]; baselines: BaselineResult[] }> = {
+    long: { net: [], gross: [], baselines: [] },
+    short: { net: [], gross: [], baselines: [] },
+  };
 
   for (const [k, symbol] of symbols.entries()) {
     const ingest = await ingestHistory({
@@ -163,9 +189,17 @@ export async function runResearch(opts: ResearchOptions): Promise<ResearchResult
     const symbolOutcomes = result.trades.map((t) => t.outcome);
     const stats = summarize(symbolOutcomes, { seed });
     outcomes.push(...symbolOutcomes);
-    const grossOutcomes = runBacktest(strategy, candles, { from: range.from, costs: NO_COSTS }).trades.map((t) => t.outcome);
+    const grossTrades = runBacktest(strategy, candles, { from: range.from, costs: NO_COSTS }).trades;
+    const grossOutcomes = grossTrades.map((t) => t.outcome);
     gross.push(...grossOutcomes);
     baselines.push(randomBaseline(result.trades, candles, { runs, seed: seed + k, from: range.from }));
+    for (const [d, direction] of (["long", "short"] as const).entries()) {
+      const own = result.trades.filter((t) => t.signal.direction === direction);
+      directionTrades[direction].net.push(...own.map((t) => t.outcome));
+      directionTrades[direction].gross.push(...grossTrades.filter((t) => t.signal.direction === direction).map((t) => t.outcome));
+      // Отдельные зёрна: общая базовая линия выше остаётся воспроизводимой.
+      directionTrades[direction].baselines.push(randomBaseline(own, candles, { runs, seed: seed + 1000 * (d + 1) + k, from: range.from }));
+    }
     totalBySymbol.push(stats.totalR);
     perSymbol.push({
       symbol,
@@ -184,7 +218,32 @@ export async function runResearch(opts: ResearchOptions): Promise<ResearchResult
   const baseline = combineBaselines(baselines);
   const topSymbolShare = stats.totalR > 0 ? Math.max(...totalBySymbol) / stats.totalR : null;
   const report = judge(stats, baseline, symbols.length > 1 ? { topSymbolShare } : undefined);
-  return { strategyId: strategy.id, strategyVersion: strategy.version, segment, range, perSymbol, stats, grossStats, baseline, topSymbolShare, report };
+  const byDirection = (["long", "short"] as const).map((direction) => ({
+    direction,
+    stats: summarize(directionTrades[direction].net, { seed }),
+    grossExpectancyR: summarize(directionTrades[direction].gross, { seed }).expectancyR,
+    baseline: combineBaselines(directionTrades[direction].baselines),
+  }));
+  return {
+    strategyId: strategy.id, strategyVersion: strategy.version, segment, range, perSymbol, stats, grossStats, baseline, topSymbolShare, report,
+    byDirection, byMonth: monthBreakdown(outcomes),
+  };
+}
+
+/** Сделки по месяцу входа (UTC). */
+export function monthBreakdown(outcomes: readonly SignalOutcome[]): MonthBreakdown[] {
+  const months = new Map<string, number[]>();
+  for (const o of outcomes) {
+    if (o.rMultiple === undefined || o.entryTime === undefined) continue;
+    const m = new Date(o.entryTime).toISOString().slice(0, 7);
+    months.set(m, [...(months.get(m) ?? []), o.rMultiple]);
+  }
+  return [...months.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([month, rs]) => {
+      const totalR = rs.reduce((a, b) => a + b, 0);
+      return { month, trades: rs.length, totalR, expectancyR: totalR / rs.length };
+    });
 }
 
 export function journalEntry(r: ResearchResult, meta: { at: UnixMs; codeCommit: string | null; seed: number; runs: number }): JournalEntry {
@@ -243,6 +302,25 @@ export function renderResearchReport(r: ResearchResult, plan: SplitPlan, journal
       (r.grossStats.ci95 ? `, 95% CI [${r3(r.grossStats.ci95[0])}, ${r3(r.grossStats.ci95[1])}]` : ""),
     `- Макс. просадка ${r3(r.stats.maxDrawdownR)} R`,
     `- Случайные входы: ${r.baseline.runs} прогонов, медиана ${r3(r.baseline.p50)} R, p95 ${r3(r.baseline.p95)} R`,
+    "",
+    "## По направлениям",
+    "",
+    "| Направление | Сделок | Матожидание, R | 95% CI | Без издержек, R | Случайные того же направления: медиана / p95, R |",
+    "|---|---|---|---|---|---|",
+    ...r.byDirection.map(
+      (d) =>
+        `| ${d.direction} | ${d.stats.trades} | ${r3(d.stats.expectancyR)} | ${d.stats.ci95 ? `[${r3(d.stats.ci95[0])}, ${r3(d.stats.ci95[1])}]` : "—"} | ` +
+        `${r3(d.grossExpectancyR)} | ${r3(d.baseline.p50)} / ${r3(d.baseline.p95)} |`,
+    ),
+    "",
+    "Если матожидание направления не выше медианы случайных входов того же направления, результат объясняется",
+    "движением рынка за период, а не правилом входа.",
+    "",
+    "## По месяцам (вход, UTC)",
+    "",
+    "| Месяц | Сделок | Итого, R | Матожидание, R |",
+    "|---|---|---|---|",
+    ...r.byMonth.map((m) => `| ${m.month} | ${m.trades} | ${r3(m.totalR)} | ${r3(m.expectancyR)} |`),
     "",
     "## Критерии отказа (strategy-spec §6)",
     "",

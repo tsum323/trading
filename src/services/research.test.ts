@@ -11,6 +11,7 @@ import {
   assertHoldoutAllowed,
   HoldoutUsedError,
   journalEntry,
+  monthBreakdown,
   planSplit,
   renderResearchReport,
   runResearch,
@@ -106,9 +107,18 @@ describe("runResearch", () => {
     expect(r.stats.byStatus.expired).toBe(r.stats.trades); // ровный рынок: только истечения
     expect(r.report.checks.map((c) => c.name)).toContain("not concentrated in one symbol");
 
+    // Разбивка: тестовая стратегия открывает только long.
+    const [long, short] = r.byDirection;
+    expect([long!.direction, long!.stats.trades, short!.direction, short!.stats.trades]).toEqual(["long", r.stats.trades, "short", 0]);
+    expect(long!.baseline.runs).toBe(20);
+    expect(r.byMonth.reduce((a, m) => a + m.trades, 0)).toBe(r.stats.trades);
+
     const entry = journalEntry(r, { at: now, codeCommit: "abc", seed: 1, runs: 20 });
     expect(entry).toMatchObject({ segment: "research", from: range.from, to: range.to, symbols: ["A/USDT", "B/USDT"], trades: r.stats.trades });
-    expect(renderResearchReport(r, plan, [entry], { at: now, codeCommit: "abc" })).toContain(`**Вердикт: ${r.report.verdict}**`);
+    const md = renderResearchReport(r, plan, [entry], { at: now, codeCommit: "abc" });
+    expect(md).toContain(`**Вердикт: ${r.report.verdict}**`);
+    expect(md).toContain("## По направлениям");
+    expect(md).toContain("## По месяцам");
   });
 
   it("refuses a segment that ends in the future", async () => {
@@ -124,5 +134,15 @@ describe("configurationKey", () => {
     const base = { strategyId: "s", strategyVersion: "0.1.0" };
     expect(configurationKey({ ...base, symbols: ["ETH/USDT", "BTC/USDT"] })).toBe(configurationKey({ ...base, symbols: ["BTC/USDT", "ETH/USDT"] }));
     expect(configurationKey({ ...base, symbols: ["BTC/USDT"] })).not.toBe(configurationKey({ ...base, symbols: ["BTC/USDT", "ETH/USDT"] }));
+  });
+});
+
+describe("monthBreakdown", () => {
+  it("groups R by UTC month of entry and skips outcomes without R", () => {
+    const o = (day: number, r?: number) => ({ signalId: String(day), status: "stop" as const, entryTime: T0 + day * DAY, ...(r === undefined ? {} : { rMultiple: r }), evaluatedAt: 0, evaluatorVersion: "1" });
+    expect(monthBreakdown([o(0, 1), o(5, -1), o(40, 2), o(41)])).toEqual([
+      { month: "2024-01", trades: 2, totalR: 0, expectancyR: 0 },
+      { month: "2024-02", trades: 1, totalR: 2, expectancyR: 2 },
+    ]);
   });
 });
