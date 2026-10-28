@@ -1,6 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import type { Timeframe, UnixMs } from "@/core/time";
 import type { Candle, CandleQuery, MarketDataSourceId } from "@/modules/market-data";
+import type { NoEntryReason, OutcomeStatus, SignalOutcome } from "@/modules/backtest";
 import type { TradingSignal } from "@/modules/strategies";
 import { MIGRATIONS } from "./schema";
 
@@ -37,6 +38,21 @@ interface SignalRow {
   expires_at: number;
   features: string;
   rule: string;
+}
+
+interface OutcomeRow {
+  signal_id: string;
+  status: string;
+  reason: string | null;
+  entry_time: number | null;
+  entry_price: number | null;
+  exit_time: number | null;
+  exit_price: number | null;
+  r_multiple: number | null;
+  mfe_r: number | null;
+  mae_r: number | null;
+  evaluated_at: number;
+  evaluator_version: string;
 }
 
 /**
@@ -157,6 +173,45 @@ export class SqliteStore {
       expiresAt: r.expires_at,
       features: JSON.parse(r.features) as Record<string, number>,
       rule: r.rule,
+    };
+  }
+
+  /**
+   * Сохраняет исход сигнала. Исход — производная величина: повторная оценка
+   * (например, новой версией оценщика) заменяет предыдущую запись.
+   */
+  saveOutcome(o: SignalOutcome): void {
+    this.db
+      .prepare(`
+        INSERT OR REPLACE INTO signal_outcomes (signal_id, status, reason, entry_time, entry_price, exit_time, exit_price,
+          r_multiple, mfe_r, mae_r, evaluated_at, evaluator_version)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `)
+      .run(
+        o.signalId, o.status, o.reason ?? null, o.entryTime ?? null, o.entryPrice ?? null, o.exitTime ?? null,
+        o.exitPrice ?? null, o.rMultiple ?? null, o.mfeR ?? null, o.maeR ?? null, o.evaluatedAt, o.evaluatorVersion,
+      );
+  }
+
+  getOutcome(signalId: string): SignalOutcome | undefined {
+    const r = this.db.prepare("SELECT * FROM signal_outcomes WHERE signal_id = ?").get(signalId) as
+      | OutcomeRow
+      | undefined;
+    if (!r) return undefined;
+    const optional = <K extends string, V>(key: K, value: V | null) => (value === null ? {} : { [key]: value });
+    return {
+      signalId: r.signal_id,
+      status: r.status as OutcomeStatus,
+      ...optional("reason", r.reason as NoEntryReason | null),
+      ...optional("entryTime", r.entry_time),
+      ...optional("entryPrice", r.entry_price),
+      ...optional("exitTime", r.exit_time),
+      ...optional("exitPrice", r.exit_price),
+      ...optional("rMultiple", r.r_multiple),
+      ...optional("mfeR", r.mfe_r),
+      ...optional("maeR", r.mae_r),
+      evaluatedAt: r.evaluated_at,
+      evaluatorVersion: r.evaluator_version,
     };
   }
 

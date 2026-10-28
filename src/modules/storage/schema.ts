@@ -57,4 +57,28 @@ export const MIGRATIONS: readonly string[] = [
     evaluator_version TEXT NOT NULL
   ) STRICT;
   `,
+  // v2: статус 'data-gap' и причина 'no-entry'. SQLite не меняет CHECK на месте — пересоздаём таблицу с копированием строк.
+  `
+  CREATE TABLE signal_outcomes_v2 (
+    signal_id     TEXT    PRIMARY KEY REFERENCES signals (id),
+    status        TEXT    NOT NULL CHECK (status IN ('target', 'stop', 'expired', 'ambiguous', 'no-entry', 'data-gap')),
+    reason        TEXT,
+    entry_time    INTEGER,
+    entry_price   REAL,
+    exit_time     INTEGER,
+    exit_price    REAL,
+    r_multiple    REAL,
+    mfe_r         REAL,
+    mae_r         REAL,
+    evaluated_at  INTEGER NOT NULL,
+    evaluator_version TEXT NOT NULL
+  ) STRICT;
+  INSERT INTO signal_outcomes_v2 (signal_id, status, entry_time, entry_price, exit_time, exit_price,
+    r_multiple, mfe_r, mae_r, evaluated_at, evaluator_version)
+  SELECT signal_id, status, entry_time, entry_price, exit_time, exit_price,
+    r_multiple, mfe_r, mae_r, evaluated_at, evaluator_version
+  FROM signal_outcomes;
+  DROP TABLE signal_outcomes;
+  ALTER TABLE signal_outcomes_v2 RENAME TO signal_outcomes;
+  `,
 ];
