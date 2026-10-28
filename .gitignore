@@ -1,0 +1,25 @@
+# зависимости
+node_modules/
+
+# сборка Next.js
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+
+# локальные данные (SQLite) — не коммитим
+data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# окружение
+.env
+.env.*
+!.env.example
+
+# прочее
+coverage/
+.DS_Store
+npm-debug.log*
