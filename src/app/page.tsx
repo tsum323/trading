@@ -5,7 +5,7 @@ export default function HomePage() {
     <main className="page">
       <header className="header">
         <h1>Trading Research Terminal</h1>
-        <span className="hint">Публичные данные Binance Spot · время UTC</span>
+        <span className="hint">Публичные данные Binance Spot · время МСК</span>
       </header>
       <p className="notice">
         <b>Только исследование.</b> Исполнения ордеров нет, торговые ключи не используются. Ни одна стратегия пока
