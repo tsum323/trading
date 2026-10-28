@@ -78,6 +78,14 @@
 | `storage` | схема SQLite, миграции, чтение/запись | не содержит бизнес-логики | market-data, strategies (типы) |
 | `services` | сценарии, связывающие модули: загрузка истории (`ingestHistory`), цикл перспективного теста (`runLiveCycle`) и его отчёт, прогон на части разбиения 60/20/20 с журналом (`runResearch`) | не содержит доменной логики индикаторов/стратегий | market-data, storage, backtest, strategies |
 
+### Интерфейс
+
+`src/app` — Next.js. Серверные маршруты: `/api/candles` (публичный API Binance
+через `BinanceSpotSource` + `fetchCandleRange`) и `/api/overview` (журнал и
+перспективный тест из ветки `data` через `DataBranchReader`). Логика экрана —
+чистые функции `app/terminal/model.ts` (индикаторы по закрытым свечам,
+отметки сигналов, реплей); компоненты только отображают.
+
 ### Источник данных: Binance Spot
 
 `BinanceSpotSource` (`market-data/binance-spot.ts`) обращается к
