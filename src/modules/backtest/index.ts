@@ -10,3 +10,7 @@ export {
   type OutcomeStatus,
   type SignalOutcome,
 } from "./outcome";
+export { runBacktest, windowBars, type BacktestOptions, type BacktestResult, type Trade } from "./run";
+export { summarize, type TradeStats } from "./stats";
+export { randomBaseline, type BaselineResult } from "./baseline";
+export { judge, MIN_TRADES, MAX_TOP_MONTH_SHARE, type Verdict, type VerdictReport } from "./verdict";

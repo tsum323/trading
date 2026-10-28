@@ -37,6 +37,7 @@ npm run dev       # http://localhost:3000
 | `npm run lint` | ESLint (конфигурация Next.js) |
 | `npm run check` | typecheck + lint + test |
 | `npm run ingest -- …` | загрузка истории свечей в SQLite (см. ниже) |
+| `npm run backtest -- …` | исторический прогон `trend-pullback` (см. ниже) |
 
 ## Загрузка истории
 
@@ -68,6 +69,23 @@ Binance недоступен из некоторых юрисдикций (HTTP 
 При тестах Node выводит `ExperimentalWarning: SQLite is an experimental
 feature` — это ожидаемо для `node:sqlite` в Node 22.
 
+## Исторический прогон
+
+```bash
+npm run ingest -- --symbol BTC/USDT --timeframe 15m --from 2023-12-01 --to 2024-07-01
+npm run backtest -- --symbol BTC/USDT --from 2024-01-01 --to 2024-07-01
+```
+
+Прогон стратегии `trend-pullback` (`docs/strategy-spec.md`) по свечам из базы:
+сигналы, исходы по правилам `docs/validation-plan.md` §3, матожидание в R с
+95% интервалом (блоковый бутстреп по дням), сравнение с 1000 случайными
+входами и проверка критериев отказа. Нужен прогрев 30 дней до `--from`.
+Параметры: `--db`, `--source` (по умолчанию `binance-spot`), `--runs`,
+`--seed` (одинаковое зерно — одинаковый отчёт).
+
+Отчёт — не доказательство прибыльности: вывод действителен только для
+однократного прогона на отложенной выборке и перспективного теста.
+
 ## Структура
 
 ```
@@ -85,6 +103,7 @@ src/
   services/            сценарии, связывающие модули (загрузка истории)
   test/fixtures.ts     синтетические свечи ТОЛЬКО для тестов
 scripts/ingest.ts      CLI загрузки истории
+scripts/backtest.ts    CLI исторического прогона
 docs/
   architecture.md      компоненты, поток данных, форматы хранения
   strategy-spec.md     первая исследовательская гипотеза

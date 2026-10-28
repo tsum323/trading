@@ -16,7 +16,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "check": "npm run typecheck && npm run lint && npm run test",
-    "ingest": "tsx scripts/ingest.ts"
+    "ingest": "tsx scripts/ingest.ts",
+    "backtest": "tsx scripts/backtest.ts"
   },
   "dependencies": {
     "next": "16.4.3",
