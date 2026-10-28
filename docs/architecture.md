@@ -73,7 +73,7 @@
 | `indicators` | чистые функции `Candle[] → (number\|null)[]` | не обращается к сети/БД, не видит время решения | market-data (типы) |
 | `strategies` | интерфейс `Strategy`, типы сигналов, `validateSignal` | не получает данные сам, не исполняет сделки | market-data, indicators |
 | `risk` | размер позиции, риск на сделку, ограничения | не знает о реальном счёте | strategies (типы) |
-| `backtest` | срез «на момент», пошаговый реплей, (позже) оценка исходов | не подгружает данные сам | market-data, strategies |
+| `backtest` | срез «на момент», пошаговый реплей, оценка исходов (`evaluateSignal`) | не подгружает данные сам | market-data, strategies, risk |
 | `ai-analysis` | интерфейс `MarketExplainer` | не создаёт и не меняет сигналы, не участвует в бэктесте | strategies (типы) |
 | `storage` | схема SQLite, миграции, чтение/запись | не содержит бизнес-логики | market-data, strategies (типы) |
 | `services` | сценарии, связывающие модули: загрузка истории (`ingestHistory`) | не содержит доменной логики индикаторов/стратегий | market-data, storage |
@@ -140,8 +140,11 @@ created_at` проверяется `CHECK`. `mode`: `live` (сформирова
 что сигнал не дописан задним числом. `take_profits` и `features` — JSON.
 
 **signal_outcomes** — исход сигнала, вычисленный позже по свечам после
-`created_at`: `target | stop | expired | ambiguous | no-entry`, цена и время
-входа/выхода, результат в R, MFE/MAE в R, версия оценщика.
+`created_at`: `target | stop | expired | ambiguous | no-entry | data-gap`,
+причина `no-entry` (`reason`), цена и время входа/выхода, результат в R,
+MFE/MAE в R, версия оценщика. Исход — производная величина: повторная оценка
+(новой версией оценщика) заменяет запись. Правила оценки — `validation-plan.md`
+§3, реализация — `backtest/outcome.ts`.
 
 Символы нормализуются как `BASE/QUOTE` (`BTC/USDT`), источник — строка вида
 `binance-spot`.
@@ -161,7 +164,6 @@ created_at` проверяется `CHECK`. `mode`: `live` (сформирова
 | Индикатор на префиксе == префикс полного расчёта; искажение будущего не меняет прошлое | причинность индикатора | `indicators/sma.test.ts` (`expectCausal`) |
 | `validateCandle(c, now)` ловит `isClosed` при `closeTime > now` | ошибку источника | `market-data/validation.test.ts` |
 | Схема отвергает `basis_close_time > created_at` | защиту на уровне БД | `storage/sqlite-store.test.ts` |
-
-Планируемые (вместе с оценщиком исходов): вход только по open свечи,
-следующей за `basisCloseTime`; оценщик не читает свечи до входа; при
-касании стопа и цели в одной свече исход `ambiguous` (консервативно — стоп).
+| Вход по open свечи после `basisCloseTime`; свечи до входа и после выхода не меняют исход | оценщик не видит лишнего | `backtest/outcome.test.ts` |
+| Свеча, закрытая после `asOf`, не используется → `pending` | оценка не опережает данные | там же |
+| Стоп и цель в одной свече → `ambiguous` (как стоп) | консервативность | там же |

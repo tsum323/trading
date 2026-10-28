@@ -26,6 +26,16 @@ export interface RiskResult {
 export const MAX_RISK_FRACTION = 0.02;
 
 /**
+ * Убыток на единицу актива при выходе точно по стопу, включая комиссии входа
+ * и выхода. Это и есть 1R. Если стоп по неверную сторону входа — RangeError.
+ */
+export function lossPerUnit(direction: SignalDirection, entry: number, stopLoss: number, feeRate = 0): number {
+  const priceRisk = direction === "long" ? entry - stopLoss : stopLoss - entry;
+  if (priceRisk <= 0) throw new RangeError("stopLoss is on the wrong side of entry");
+  return priceRisk + feeRate * (entry + stopLoss);
+}
+
+/**
  * Размер позиции по фиксированной доле риска. Проскальзывание не учитывается —
  * это делается в оценщике исходов.
  */
@@ -38,11 +48,8 @@ export function positionSize(input: RiskInput): RiskResult {
   if (!(entry > 0 && stopLoss > 0)) throw new RangeError("prices must be > 0");
   if (!(feeRate >= 0 && feeRate < 0.01)) throw new RangeError("feeRate must be in [0, 0.01)");
 
-  const priceRisk = direction === "long" ? entry - stopLoss : stopLoss - entry;
-  if (priceRisk <= 0) throw new RangeError("stopLoss is on the wrong side of entry");
-
-  const lossPerUnit = priceRisk + feeRate * (entry + stopLoss);
+  const perUnit = lossPerUnit(direction, entry, stopLoss, feeRate);
   const riskAmount = equity * riskFraction;
-  const quantity = riskAmount / lossPerUnit;
-  return { quantity, notional: quantity * entry, riskAmount, lossPerUnit };
+  const quantity = riskAmount / perUnit;
+  return { quantity, notional: quantity * entry, riskAmount, lossPerUnit: perUnit };
 }

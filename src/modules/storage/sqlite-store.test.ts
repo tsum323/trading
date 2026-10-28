@@ -1,7 +1,36 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { FIXTURE_SOURCE, makeCandles } from "@/test/fixtures";
+import type { SignalOutcome } from "@/modules/backtest";
 import type { TradingSignal } from "@/modules/strategies";
+import { MIGRATIONS } from "./schema";
 import { SqliteStore } from "./sqlite-store";
+
+describe("migrations", () => {
+  it("upgrades a v1 database and keeps existing outcomes", () => {
+    const dir = mkdtempSync(join(tmpdir(), "trading-migr-"));
+    const path = join(dir, "v1.db");
+    try {
+      const v1 = new DatabaseSync(path);
+      v1.exec(MIGRATIONS[0]!);
+      v1.exec("PRAGMA user_version = 1");
+      v1.exec(`INSERT INTO signals VALUES ('s', 'st', '0', 'src', 'X/Y', '1m', 10, 10, 'long', 'next-open', 1, 0.5, '[2]', 20, '{}', 'r', 'replay', 10)`);
+      v1.exec(`INSERT INTO signal_outcomes (signal_id, status, r_multiple, evaluated_at, evaluator_version) VALUES ('s', 'stop', -1, 30, '0')`);
+      v1.close();
+
+      const store = new SqliteStore(path);
+      expect(store.getOutcome("s")).toEqual({ signalId: "s", status: "stop", rMultiple: -1, evaluatedAt: 30, evaluatorVersion: "0" });
+      const { user_version } = store.db.prepare("PRAGMA user_version").get() as { user_version: number };
+      expect(user_version).toBe(MIGRATIONS.length);
+      store.close();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
 
 describe("SqliteStore", () => {
   let store: SqliteStore;
@@ -54,6 +83,24 @@ describe("SqliteStore", () => {
     store.insertSignal(signal, "replay", 0);
     expect(store.getSignal(signal.id)).toEqual(signal);
     expect(() => store.insertSignal(signal, "replay", 1)).toThrow();
+  });
+
+  it("round-trips outcomes and replaces them on re-evaluation", () => {
+    store.insertSignal(signal, "replay", 0);
+    const outcome: SignalOutcome = {
+      signalId: signal.id, status: "target", entryTime: 60_000, entryPrice: 100, exitTime: 180_000, exitPrice: 102,
+      rMultiple: 2, mfeR: 2, maeR: -0.5, evaluatedAt: 1, evaluatorVersion: "1",
+    };
+    store.saveOutcome(outcome);
+    expect(store.getOutcome(signal.id)).toEqual(outcome);
+
+    const noEntry: SignalOutcome = { signalId: signal.id, status: "no-entry", reason: "entry-candle-missing", evaluatedAt: 2, evaluatorVersion: "2" };
+    store.saveOutcome(noEntry);
+    expect(store.getOutcome(signal.id)).toEqual(noEntry);
+  });
+
+  it("rejects an outcome for an unknown signal", () => {
+    expect(() => store.saveOutcome({ signalId: "missing", status: "stop", evaluatedAt: 0, evaluatorVersion: "1" })).toThrow();
   });
 
   it("enforces basisCloseTime <= createdAt at the schema level", () => {
