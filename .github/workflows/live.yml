@@ -1,0 +1,63 @@
+name: Live forward test
+
+# Перспективный тест trend-pullback на публичных данных Binance Spot (docs/validation-plan.md §6).
+# Каждые 15 минут, через минуту после закрытия 15m-свечи: догрузить свечи, записать новые
+# сигналы, оценить исходы, обновить отчёт и закоммитить всё в ветку `data`.
+# Исполнения ордеров и API-ключей нет.
+
+on:
+  schedule:
+    - cron: "1,16,31,46 * * * *"
+  workflow_dispatch:
+    inputs:
+      symbols:
+        description: "Символы через запятую"
+        default: "BTC/USDT,ETH/USDT"
+
+permissions:
+  contents: write
+
+# Циклы не должны пересекаться: каждый дописывает журналы в ветку `data`.
+concurrency:
+  group: live-forward-test
+  cancel-in-progress: false
+
+jobs:
+  cycle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+
+      - name: Check out the data branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git ls-remote --exit-code --heads origin data >/dev/null; then
+            git fetch --depth=1 origin data:refs/remotes/origin/data
+            git worktree add -B data archive origin/data
+          else
+            git worktree add --orphan -b data archive
+          fi
+
+      - name: Run one cycle
+        run: npm run live -- --archive archive --symbols "$SYMBOLS"
+        env:
+          SYMBOLS: ${{ inputs.symbols || 'BTC/USDT,ETH/USDT' }}
+          NEXT_TELEMETRY_DISABLED: "1"
+
+      - name: Commit and push
+        working-directory: archive
+        run: |
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes"
+            exit 0
+          fi
+          git commit -q -m "data: live cycle $(date -u +%Y-%m-%dT%H:%MZ) (code ${GITHUB_SHA::7})"
+          git push origin data
