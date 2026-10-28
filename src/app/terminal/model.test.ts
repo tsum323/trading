@@ -25,9 +25,11 @@ describe("parseCandleRequest", () => {
 
 describe("candleCount", () => {
   it("adds the longest strategy lookback for the timeframe to the visible window", () => {
-    expect(strategiesFor("1h").map((s) => s.id)).toEqual(["donchian-breakout"]);
+    expect(strategiesFor("1h").map((e) => e.key)).toEqual(["donchian-breakout"]);
+    expect(strategiesFor("4h").map((e) => [e.key, e.strategy.timeframe])).toEqual([["donchian-breakout-4h", "4h"]]);
     expect(candleCount("1h")).toBe(VISIBLE_CANDLES + 1000);
     expect(candleCount("15m")).toBe(Math.min(MAX_CANDLES, VISIBLE_CANDLES + 30 * 96 + 14));
+    expect(candleCount("4h")).toBe(VISIBLE_CANDLES + 1000);
     expect(candleCount("1d")).toBe(VISIBLE_CANDLES + 250);
   });
 });

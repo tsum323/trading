@@ -103,7 +103,7 @@ export function Terminal() {
 
   const strategies = useMemo(() => strategiesFor(timeframe), [timeframe]);
   // Выбранная стратегия может не подходить к новому таймфрейму — тогда реплей выключен.
-  const activeReplay = strategies.some((s) => s.id === replayId) ? replayId : "";
+  const activeReplay = strategies.some((e) => e.key === replayId) ? replayId : "";
 
   const data = candles.state === "ready" ? candles.data.candles : NO_CANDLES;
   const closed = candles.state === "ready" ? candles.data.closed : NO_CANDLES;
@@ -151,7 +151,7 @@ export function Terminal() {
         <label>Реплей стратегии
           <select value={activeReplay} onChange={(e) => setReplayId(e.target.value)} disabled={strategies.length === 0}>
             <option value="">{strategies.length === 0 ? "нет для этого таймфрейма" : "выключен"}</option>
-            {strategies.map((s) => <option key={s.id} value={s.id}>{s.id}@{s.version}</option>)}
+            {strategies.map(({ key, strategy: s }) => <option key={key} value={key}>{s.id}@{s.version}</option>)}
           </select>
         </label>
       </div>

@@ -70,7 +70,10 @@ export async function runLiveCycle(opts: LiveCycleOptions): Promise<SymbolCycleR
     const last = archive.lastCandle(source.id, symbol, tf);
 
     // Все записанные сигналы символа и их исходы.
-    const records = archive.readJsonl<LiveSignalRecord>(signalsLog(strategy)).filter((r) => r.signal.symbol === symbol && r.signal.source === source.id);
+    // Один журнал на id стратегии; версии (например, 1h и 4h) не смешиваются.
+    const records = archive
+      .readJsonl<LiveSignalRecord>(signalsLog(strategy))
+      .filter((r) => r.signal.symbol === symbol && r.signal.source === source.id && r.signal.strategyVersion === strategy.version);
     const outcomes = new Map(archive.readJsonl<SignalOutcome>(outcomesLog(strategy)).map((o) => [o.signalId, o]));
     const known = new Set(records.map((r) => r.signal.id));
 
