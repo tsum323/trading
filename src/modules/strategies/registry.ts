@@ -6,6 +6,7 @@ import type { Strategy } from "./types";
 const STRATEGIES: Record<string, () => Strategy> = {
   "trend-pullback": () => trendPullback(),
   "donchian-breakout": () => donchianBreakout(),
+  "donchian-breakout-4h": () => donchianBreakout({ timeframe: "4h" }),
 };
 
 export const STRATEGY_IDS = Object.keys(STRATEGIES);

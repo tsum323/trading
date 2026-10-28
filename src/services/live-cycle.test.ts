@@ -124,3 +124,24 @@ describe("runLiveCycle", () => {
     expect(md).toMatch(/Сделок с результатом: 1,/);
   });
 });
+
+describe("runLiveCycle: versions sharing a strategy id", () => {
+  it("keeps one-open-signal accounting per version", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "trading-live-v-"));
+    try {
+      const archive = new FileArchive(dir);
+      const clock = { now: T0 + 10 * M + 5_000 };
+      const other = { ...everyBar, version: "other" };
+      const run = (s: Strategy, at: number) => {
+        clock.now = at;
+        return runLiveCycle({ source: fixtureMarket(clock), archive, strategy: s, symbols: ["TEST/USDT"], now: () => clock.now, sleep: async () => {} });
+      };
+      await run(everyBar, T0 + 10 * M + 5_000);
+      await run(everyBar, T0 + 11 * M + 5_000); // открыт сигнал версии "0"
+      const [r] = await run(other, T0 + 12 * M + 5_000); // другая версия — не блокируется им
+      expect(r!.newSignals.map((s) => s.strategyVersion)).toEqual(["other"]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

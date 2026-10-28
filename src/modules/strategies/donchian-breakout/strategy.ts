@@ -1,10 +1,12 @@
-import { TIMEFRAME_MS } from "@/core/time";
+import { TIMEFRAME_MS, type Timeframe } from "@/core/time";
 import { atr, ema } from "@/modules/indicators";
 import type { SignalDraft, Strategy } from "../types";
 import { paramsVersion } from "../version";
 
 /** Параметры из docs/strategy-donchian-breakout.md §3. */
 export interface DonchianBreakoutParams {
+  /** Таймфрейм; остальные параметры — в свечах этого таймфрейма (§8). */
+  timeframe: Timeframe;
   /** Длина канала в свечах; текущая свеча в канал не входит. */
   channel: number;
   trendEma: number;
@@ -17,6 +19,7 @@ export interface DonchianBreakoutParams {
 }
 
 export const DEFAULT_PARAMS: DonchianBreakoutParams = {
+  timeframe: "1h",
   channel: 48,
   trendEma: 200,
   atrPeriod: 24,
@@ -34,8 +37,8 @@ export function versionFor(params: DonchianBreakoutParams): string {
 }
 
 /**
- * Пробой канала Дончиана по закрытию часовой свечи в направлении EMA тренда
- * (docs/strategy-donchian-breakout.md).
+ * Пробой канала Дончиана по закрытию свечи в направлении EMA тренда
+ * (docs/strategy-donchian-breakout.md). По умолчанию 1h; вариант 4h — §8.
  */
 export function donchianBreakout(overrides: Partial<DonchianBreakoutParams> = {}): Strategy {
   const p: DonchianBreakoutParams = { ...DEFAULT_PARAMS, ...overrides };
@@ -44,7 +47,7 @@ export function donchianBreakout(overrides: Partial<DonchianBreakoutParams> = {}
   }
   const trendEma = ema(p.trendEma);
   const atrInd = atr(p.atrPeriod);
-  const tf = "1h" as const;
+  const tf = p.timeframe;
 
   return {
     id: STRATEGY_ID,

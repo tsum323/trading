@@ -1,5 +1,5 @@
 import type { SignalOutcome } from "@/modules/backtest";
-import { STRATEGY_IDS } from "@/modules/strategies/registry";
+import { getStrategy, STRATEGY_IDS } from "@/modules/strategies/registry";
 import { DataBranchReader } from "@/services/data-branch";
 import type { LiveSignalRecord } from "@/services/live-cycle";
 import type { JournalEntry, SplitPlan } from "@/services/research";
@@ -24,7 +24,8 @@ export async function GET() {
     const [split, journal, ...live] = await Promise.all([
       reader.readJson<SplitPlan>("research/split.json"),
       reader.readJsonl<JournalEntry>("research/journal.jsonl"),
-      ...STRATEGY_IDS.map(async (id) => ({
+      // Журналы перспективного теста называются по id стратегии (несколько записей реестра могут делить один id).
+      ...[...new Set(STRATEGY_IDS.map((key) => getStrategy(key).id))].map(async (id) => ({
         id,
         signals: await reader.readJsonl<LiveSignalRecord>(`signals/${id}.jsonl`),
         outcomes: await reader.readJsonl<SignalOutcome>(`outcomes/${id}.jsonl`),

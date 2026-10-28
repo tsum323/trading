@@ -25,14 +25,17 @@ export function parseCandleRequest(params: URLSearchParams): CandleRequest | { e
   return { symbol, timeframe, count };
 }
 
-/** Стратегии, работающие на этом таймфрейме. */
-export function strategiesFor(tf: Timeframe): Strategy[] {
-  return STRATEGY_IDS.map(getStrategy).filter((s) => s.timeframe === tf);
+/**
+ * Стратегии, работающие на этом таймфрейме, с ключами реестра. Ключ, а не id:
+ * несколько записей реестра делят один id (donchian-breakout 1h и 4h).
+ */
+export function strategiesFor(tf: Timeframe): { key: string; strategy: Strategy }[] {
+  return STRATEGY_IDS.map((key) => ({ key, strategy: getStrategy(key) })).filter((e) => e.strategy.timeframe === tf);
 }
 
 /** Сколько свечей грузить: видимая часть + прогрев самой «длинной» стратегии или индикатора. */
 export function candleCount(tf: Timeframe): number {
-  const warmup = Math.max(INDICATOR_WARMUP, ...strategiesFor(tf).map((s) => s.lookback));
+  const warmup = Math.max(INDICATOR_WARMUP, ...strategiesFor(tf).map((e) => e.strategy.lookback));
   return Math.min(MAX_CANDLES, VISIBLE_CANDLES + warmup);
 }
 
@@ -160,8 +163,8 @@ export interface ReplayResult {
  * Это не новый прогон исследования и не проверка гипотезы: окно короткое,
  * а журнал исследований не пополняется.
  */
-export function replayOnCandles(strategyId: string, candles: readonly Candle[]): ReplayResult {
-  const strategy = getStrategy(strategyId);
+export function replayOnCandles(registryKey: string, candles: readonly Candle[]): ReplayResult {
+  const strategy = getStrategy(registryKey);
   const have = candles.filter((c) => c.isClosed).length;
   if (have <= strategy.lookback) {
     return { strategy, trades: [], pending: 0, expectancyR: null, insufficient: { need: strategy.lookback + 1, have } };

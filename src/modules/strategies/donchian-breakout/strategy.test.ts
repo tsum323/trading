@@ -45,6 +45,19 @@ describe("donchian-breakout: version and registry", () => {
     expect(() => getStrategy("nope")).toThrow(/Unknown strategy/);
   });
 
+  it("registers the 4h variant with the same bar parameters (spec §8)", () => {
+    const s = getStrategy("donchian-breakout-4h");
+    expect([s.id, s.version, s.timeframe, s.warmup]).toEqual(["donchian-breakout", `${BASE_VERSION}+timeframe=4h`, "4h", 1000]);
+  });
+
+  it("scales expiry with the timeframe", () => {
+    const s4 = donchianBreakout({ ...SMALL, timeframe: "4h" });
+    const candles = series(700, 0.6).map((c, i) => ({ ...c, timeframe: "4h" as const, openTime: T0 + i * 4 * H, closeTime: T0 + (i + 1) * 4 * H }));
+    const signals = replaySignals(s4, candles);
+    expect(signals.length).toBeGreaterThan(0);
+    for (const sig of signals) expect(sig.expiresAt - sig.basisCloseTime).toBe(72 * 4 * H);
+  });
+
   it("rejects a lookback too short for its indicators", () => {
     expect(() => donchianBreakout({ lookback: 100 })).toThrow(RangeError);
   });
