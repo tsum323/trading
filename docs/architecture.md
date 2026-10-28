@@ -70,10 +70,10 @@
 |---|---|---|---|
 | `core` | время (UTC ms), таймфреймы | — | — |
 | `market-data` | тип `Candle`, интерфейс `MarketDataSource`, валидация свечей и рядов | не хранит, не заполняет пропуски, не принимает ключи | core |
-| `indicators` | чистые функции `Candle[] → (number\|null)[]` | не обращается к сети/БД, не видит время решения | market-data (типы) |
-| `strategies` | интерфейс `Strategy`, типы сигналов, `validateSignal` | не получает данные сам, не исполняет сделки | market-data, indicators |
+| `indicators` | чистые функции `Candle[] → (number\|null)[]`: SMA, EMA, ATR | не обращается к сети/БД, не видит время решения | market-data (типы) |
+| `strategies` | интерфейс `Strategy`, типы сигналов, `validateSignal`; реализации: `trend-pullback` | не получает данные сам, не исполняет сделки | market-data, indicators |
 | `risk` | размер позиции, риск на сделку, ограничения | не знает о реальном счёте | strategies (типы) |
-| `backtest` | срез «на момент», пошаговый реплей, оценка исходов (`evaluateSignal`) | не подгружает данные сам | market-data, strategies, risk |
+| `backtest` | срез «на момент», реплей, оценка исходов (`evaluateSignal`), прогон с правилом одного открытого сигнала (`runBacktest`), статистика и бутстреп (`summarize`), случайная базовая линия (`randomBaseline`), критерии отказа (`judge`) | не подгружает данные сам | market-data, strategies, risk |
 | `ai-analysis` | интерфейс `MarketExplainer` | не создаёт и не меняет сигналы, не участвует в бэктесте | strategies (типы) |
 | `storage` | схема SQLite, миграции, чтение/запись | не содержит бизнес-логики | market-data, strategies (типы) |
 | `services` | сценарии, связывающие модули: загрузка истории (`ingestHistory`) | не содержит доменной логики индикаторов/стратегий | market-data, storage |
@@ -94,8 +94,10 @@
 хранилище.
 
 Правило зависимостей: модули импортируют друг друга только через `index.ts`;
-`indicators` и `strategies` не импортируют `storage`, `market-data`-реализации
-или сеть — это обеспечивает воспроизводимость.
+`indicators` и `strategies` не импортируют `storage`, источники данных
+(`BinanceSpotSource`) или сеть — только типы и чистые функции вроде `resample`;
+это обеспечивает воспроизводимость. Каждая стратегия живёт в своей папке
+`strategies/<id>/`.
 
 ## Минимальные интерфейсы
 
@@ -161,7 +163,9 @@ MFE/MAE в R, версия оценщика. Исход — производна
 | Максимальный `closeTime` в контексте стратегии == `decisionTime` | стратегия не видит будущего | там же |
 | Искажение будущих свечей не меняет прошлые сигналы | инвариантность к будущему | там же |
 | Сигнал с `basisCloseTime > decisionTime` → `LookaheadError` | защита от «обхода» среза | там же |
-| Индикатор на префиксе == префикс полного расчёта; искажение будущего не меняет прошлое | причинность индикатора | `indicators/sma.test.ts` (`expectCausal`) |
+| Индикатор на префиксе == префикс полного расчёта; искажение будущего не меняет прошлое | причинность индикатора | `test/causality.ts` (`expectCausal`), применяется в `indicators/*.test.ts` |
+| Старшая свеча строится только из полного набора закрытых младших | `resample` не видит формирующийся час | `market-data/resample.test.ts` |
+| Искажение будущего не меняет прошлые сигналы `trend-pullback` | причинность стратегии | `strategies/trend-pullback/strategy.test.ts` |
 | `validateCandle(c, now)` ловит `isClosed` при `closeTime > now` | ошибку источника | `market-data/validation.test.ts` |
 | Схема отвергает `basis_close_time > created_at` | защиту на уровне БД | `storage/sqlite-store.test.ts` |
 | Вход по open свечи после `basisCloseTime`; свечи до входа и после выхода не меняют исход | оценщик не видит лишнего | `backtest/outcome.test.ts` |
