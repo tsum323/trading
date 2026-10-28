@@ -13,6 +13,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      # Сломанный workflow не виден ни тестам, ни сборке (так было в #6) — проверяем YAML и выражения.
+      - name: Lint workflows
+        run: |
+          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7
+          ./actionlint -color -shellcheck=
       - uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc

@@ -19,6 +19,7 @@ import {
   TERMINAL_TIMEFRAMES,
 } from "./model";
 import { RiskCalculator } from "./RiskCalculator";
+import { configurationKey } from "@/services/journal-key";
 
 const REFRESH_MS = 30_000;
 const NO_CANDLES: Candle[] = [];
@@ -262,7 +263,7 @@ function Journal({ overview }: { overview: Load<Overview> }) {
       {split && (
         <p className="hint">
           Разбиение: research {fmtDay(split.from)} – {fmtDay(split.researchEnd)}, validation – {fmtDay(split.validationEnd)}, holdout – {fmtDay(split.to)}.
-          Конфигураций в журнале: {new Set(journal.map((e) => `${e.strategyId}@${e.strategyVersion}`)).size}.
+          Конфигураций в журнале (стратегия, версия, символы): {new Set(journal.map(configurationKey)).size}.
         </p>
       )}
       {journal.length === 0 ? (
@@ -270,12 +271,13 @@ function Journal({ overview }: { overview: Load<Overview> }) {
       ) : (
         <div className="table-wrap">
           <table>
-            <thead><tr><th>Запуск, UTC</th><th>Стратегия</th><th>Часть</th><th>Сделок</th><th>Матожидание</th><th>95% CI</th><th>Без издержек</th><th>Случайные p95</th><th>Вердикт</th></tr></thead>
+            <thead><tr><th>Запуск, UTC</th><th>Стратегия</th><th>Символы</th><th>Часть</th><th>Сделок</th><th>Матожидание</th><th>95% CI</th><th>Без издержек</th><th>Случайные p95</th><th>Вердикт</th></tr></thead>
             <tbody>
               {[...journal].reverse().map((e) => (
-                <tr key={`${e.at}-${e.strategyId}-${e.segment}`}>
+                <tr key={configurationKey(e) + e.at + e.segment}>
                   <td>{fmtTime(e.at)}</td>
                   <td>{e.strategyId}@{e.strategyVersion}</td>
+                  <td title={e.symbols.join(", ")}>{e.symbols.length <= 2 ? e.symbols.map((s) => s.split("/")[0]).join(", ") : `${e.symbols.length} пар`}</td>
                   <td>{e.segment}</td>
                   <td>{e.trades}</td>
                   <td>{fmtR(e.expectancyR)}</td>

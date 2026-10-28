@@ -14,6 +14,7 @@ import type { Gap, MarketDataSource, MarketSymbol } from "@/modules/market-data"
 import type { FileArchive } from "@/modules/storage";
 import type { Strategy } from "@/modules/strategies";
 import { ingestHistory } from "./ingest-history";
+import { configurationKey } from "./journal-key";
 
 const DAY = 86_400_000;
 const NO_COSTS = { feeRate: 0, slippage: 0 };
@@ -254,7 +255,7 @@ export function renderResearchReport(r: ResearchResult, plan: SplitPlan, journal
     `Прогонов этой стратегии: ${journal.filter((e) => e.strategyId === r.strategyId).length} ` +
       `(версии: ${[...new Set(journal.filter((e) => e.strategyId === r.strategyId).map((e) => e.strategyVersion))].join(", ")}). ` +
       `Всего в журнале: ${journal.length} прогонов, ` +
-      `${new Set(journal.map((e) => `${e.strategyId}@${e.strategyVersion}`)).size} конфигураций. ` +
+      `${new Set(journal.map(configurationKey)).size} конфигураций (стратегия, версия и набор символов). ` +
       "Число испробованных конфигураций учитывается при оценке (validation-plan §5).",
   ];
   return `${lines.join("\n")}\n`;
