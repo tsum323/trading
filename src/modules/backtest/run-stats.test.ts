@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Candle } from "@/modules/market-data";
 import type { Strategy } from "@/modules/strategies";
 import { FIXTURE_SOURCE, makeCandles } from "@/test/fixtures";
-import { randomBaseline } from "./baseline";
+import { combineBaselines, randomBaseline } from "./baseline";
 import type { SignalOutcome } from "./outcome";
 import { runBacktest } from "./run";
 import { summarize } from "./stats";
@@ -106,8 +106,17 @@ describe("randomBaseline", () => {
   });
 });
 
+describe("combineBaselines", () => {
+  it("pools trades of the same run across symbols", () => {
+    const part = (perRun: { sum: number; count: number }[]) => ({ runs: perRun.length, expectancies: [], p50: 0, p95: 0, perRun });
+    const c = combineBaselines([part([{ sum: 1, count: 1 }, { sum: -2, count: 2 }]), part([{ sum: 3, count: 3 }, { sum: 0, count: 0 }])]);
+    expect(c.perRun).toEqual([{ sum: 4, count: 4 }, { sum: -2, count: 2 }]);
+    expect(c.expectancies).toEqual([-1, 1]);
+  });
+});
+
 describe("judge", () => {
-  const baseline = { runs: 100, expectancies: [], p50: 0, p95: 0.1 };
+  const baseline = { runs: 100, expectancies: [], p50: 0, p95: 0.1, perRun: [] };
   const many = (r: number, n: number) => Array.from({ length: n }, (_, i) => outcome(r + (i % 2 ? 0.5 : -0.5), i));
 
   it("is insufficient-data below 100 trades", () => {
@@ -122,6 +131,13 @@ describe("judge", () => {
     const r = judge(summarize(many(1, 120)), baseline);
     expect(r.checks.map((c) => c.passed)).toEqual([true, true, true, true]);
     expect(r.verdict).toBe("not-rejected");
+  });
+
+  it("checks symbol concentration only for multi-symbol runs", () => {
+    const stats = summarize(many(1, 120));
+    expect(judge(stats, baseline, { topSymbolShare: 0.7 })).toMatchObject({ verdict: "rejected" });
+    expect(judge(stats, baseline, { topSymbolShare: 0.5 }).verdict).toBe("not-rejected");
+    expect(judge(stats, baseline).checks).toHaveLength(4);
   });
 
   it("uses only fixture data here", () => {

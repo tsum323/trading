@@ -76,7 +76,7 @@
 | `backtest` | срез «на момент», реплей, оценка исходов (`evaluateSignal`), прогон с правилом одного открытого сигнала (`runBacktest`), статистика и бутстреп (`summarize`), случайная базовая линия (`randomBaseline`), критерии отказа (`judge`) | не подгружает данные сам | market-data, strategies, risk |
 | `ai-analysis` | интерфейс `MarketExplainer` | не создаёт и не меняет сигналы, не участвует в бэктесте | strategies (типы) |
 | `storage` | схема SQLite, миграции, чтение/запись | не содержит бизнес-логики | market-data, strategies (типы) |
-| `services` | сценарии, связывающие модули: загрузка истории (`ingestHistory`), цикл перспективного теста (`runLiveCycle`) и его отчёт | не содержит доменной логики индикаторов/стратегий | market-data, storage, backtest, strategies |
+| `services` | сценарии, связывающие модули: загрузка истории (`ingestHistory`), цикл перспективного теста (`runLiveCycle`) и его отчёт, прогон на части разбиения 60/20/20 с журналом (`runResearch`) | не содержит доменной логики индикаторов/стратегий | market-data, storage, backtest, strategies |
 
 ### Источник данных: Binance Spot
 

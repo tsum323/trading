@@ -3,6 +3,7 @@ import type { TradeStats } from "./stats";
 
 export const MIN_TRADES = 100;
 export const MAX_TOP_MONTH_SHARE = 0.5;
+export const MAX_TOP_SYMBOL_SHARE = 0.5;
 
 export type Verdict = "insufficient-data" | "rejected" | "not-rejected";
 
@@ -16,7 +17,12 @@ export interface VerdictReport {
  * не означает прибыльность: вывод действителен только на отложенной выборке
  * и в перспективном тесте (docs/validation-plan.md §2, §6).
  */
-export function judge(stats: TradeStats, baseline: BaselineResult): VerdictReport {
+export function judge(
+  stats: TradeStats,
+  baseline: BaselineResult,
+  /** Для прогона по нескольким символам: доля суммарного R лучшего символа (null при totalR <= 0). */
+  multiSymbol?: { topSymbolShare: number | null },
+): VerdictReport {
   const fmt = (x: number) => x.toFixed(3);
   const checks = [
     {
@@ -40,6 +46,14 @@ export function judge(stats: TradeStats, baseline: BaselineResult): VerdictRepor
       detail: stats.topMonthShare === null ? "total R <= 0" : `top month = ${(stats.topMonthShare * 100).toFixed(0)}% of total R`,
     },
   ];
+  if (multiSymbol) {
+    const share = multiSymbol.topSymbolShare;
+    checks.push({
+      name: "not concentrated in one symbol",
+      passed: share !== null && share <= MAX_TOP_SYMBOL_SHARE,
+      detail: share === null ? "total R <= 0" : `top symbol = ${(share * 100).toFixed(0)}% of total R`,
+    });
+  }
   const verdict: Verdict = !checks[0]!.passed ? "insufficient-data" : checks.every((c) => c.passed) ? "not-rejected" : "rejected";
   return { verdict, checks };
 }

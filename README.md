@@ -39,6 +39,7 @@ npm run dev       # http://localhost:3000
 | `npm run ingest -- …` | загрузка истории свечей в SQLite (см. ниже) |
 | `npm run backtest -- …` | исторический прогон `trend-pullback` (см. ниже) |
 | `npm run live -- …` | один цикл перспективного теста (см. ниже) |
+| `npm run research -- …` | прогон на части разбиения 60/20/20 с журналом (см. ниже) |
 
 ## Загрузка истории
 
@@ -87,6 +88,24 @@ npm run backtest -- --symbol BTC/USDT --from 2024-01-01 --to 2024-07-01
 Отчёт — не доказательство прибыльности: вывод действителен только для
 однократного прогона на отложенной выборке и перспективного теста.
 
+### На GitHub Actions (по кнопке)
+
+Actions → **Research backtest** → Run workflow, выбрать часть: `research`,
+`validation` или `holdout`. Workflow загружает историю BTC/USDT и ETH/USDT с
+Binance, прогоняет стратегию на выбранной части разбиения 60/20/20 и
+сохраняет в ветку `data`:
+
+```
+research/split.json        границы частей (создаются при первом запуске и не меняются)
+research/journal.jsonl     журнал всех прогонов
+reports/research/*.md      отчёт каждого прогона
+```
+
+Отчёт также показывается на странице запуска (Summary). Порядок: сначала
+`research`, затем `validation`; `holdout` — один раз для зафиксированной
+версии стратегии, повторный запуск будет отклонён. Локально:
+`npm run research -- --archive <каталог> --segment research`.
+
 ## Перспективный тест (автоматически)
 
 `.github/workflows/live.yml` запускается каждые 15 минут на GitHub Actions:
@@ -126,6 +145,8 @@ src/
 scripts/ingest.ts      CLI загрузки истории
 scripts/backtest.ts    CLI исторического прогона
 scripts/live.ts        один цикл перспективного теста
+scripts/research.ts    прогон на части разбиения
+scripts/*-data.sh      подключение и коммит ветки data в workflow
 docs/
   architecture.md      компоненты, поток данных, форматы хранения
   strategy-spec.md     первая исследовательская гипотеза

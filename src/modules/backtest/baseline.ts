@@ -9,6 +9,26 @@ export interface BaselineResult {
   expectancies: number[];
   p50: number;
   p95: number;
+  /** Сумма R и число сделок каждого прогона в порядке прогонов — для объединения символов. */
+  perRun: { sum: number; count: number }[];
+}
+
+/**
+ * Объединяет базовые линии нескольких символов: прогон i — это сделки
+ * прогона i каждого символа вместе. Прогоны символов независимы, поэтому
+ * складывать их по номеру корректно (а отсортированные квантили — нет).
+ */
+export function combineBaselines(parts: readonly BaselineResult[]): BaselineResult {
+  const runs = Math.max(0, ...parts.map((p) => p.perRun.length));
+  const perRun = Array.from({ length: runs }, (_, i) =>
+    parts.reduce((acc, p) => ({ sum: acc.sum + (p.perRun[i]?.sum ?? 0), count: acc.count + (p.perRun[i]?.count ?? 0) }), { sum: 0, count: 0 }),
+  );
+  return fromPerRun(perRun);
+}
+
+function fromPerRun(perRun: { sum: number; count: number }[]): BaselineResult {
+  const expectancies = perRun.filter((r) => r.count > 0).map((r) => r.sum / r.count).sort((a, b) => a - b);
+  return { runs: expectancies.length, expectancies, p50: quantile(expectancies, 0.5), p95: quantile(expectancies, 0.95), perRun };
 }
 
 /**
@@ -42,8 +62,8 @@ export function randomBaseline(
       };
     });
 
-  const expectancies: number[] = [];
-  if (templates.length === 0 || first < 0) return { runs: 0, expectancies, p50: Number.NaN, p95: Number.NaN };
+  const perRun: { sum: number; count: number }[] = [];
+  if (templates.length === 0 || first < 0) return fromPerRun(perRun);
 
   for (let run = 0; run < runs; run++) {
     let sum = 0;
@@ -74,8 +94,7 @@ export function randomBaseline(
         count++;
       }
     }
-    if (count > 0) expectancies.push(sum / count);
+    perRun.push({ sum, count });
   }
-  expectancies.sort((a, b) => a - b);
-  return { runs: expectancies.length, expectancies, p50: quantile(expectancies, 0.5), p95: quantile(expectancies, 0.95) };
+  return fromPerRun(perRun);
 }
