@@ -1,28 +1,21 @@
-import { TIMEFRAMES } from "@/core/time";
-
-const MODULES = ["market-data", "indicators", "strategies", "risk", "backtest", "ai-analysis", "storage"] as const;
+import { Terminal } from "./terminal/Terminal";
 
 export default function HomePage() {
   return (
-    <main style={{ maxWidth: 720 }}>
-      <h1>Trading Research Terminal</h1>
-      <p>
-        Каркас проекта. Рыночные данные ещё не подключены, поэтому здесь нет ни цен, ни графиков: страница не
-        показывает выдуманных котировок.
+    <main className="page">
+      <header className="header">
+        <h1>Trading Research Terminal</h1>
+        <span className="hint">Публичные данные Binance Spot · время UTC</span>
+      </header>
+      <p className="notice">
+        <b>Только исследование.</b> Исполнения ордеров нет, торговые ключи не используются. Ни одна стратегия пока
+        не прошла проверку (см. журнал внизу) — сигналы и реплей нельзя считать торговыми рекомендациями.
       </p>
-      <p>
-        <strong>Режим:</strong> только исследование. Исполнение ордеров и торговые API-ключи не поддерживаются.
-      </p>
-      <h2>Модули</h2>
-      <ul>
-        {MODULES.map((m) => (
-          <li key={m}>
-            <code>src/modules/{m}</code>
-          </li>
-        ))}
-      </ul>
-      <h2>Таймфреймы</h2>
-      <p>{TIMEFRAMES.join(", ")}</p>
+      <Terminal />
+      <footer className="footer">
+        Индикаторы считаются только по закрытым свечам; формирующаяся свеча показана приглушённо. Котировки не
+        подставляются: если источник недоступен, график остаётся пустым.
+      </footer>
     </main>
   );
 }
