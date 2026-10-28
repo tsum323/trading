@@ -8,7 +8,8 @@ export const DEFAULT_DATA_BRANCH_URL = "https://raw.githubusercontent.com/tsum32
 export class DataBranchReader {
   constructor(
     readonly baseUrl: string = DEFAULT_DATA_BRANCH_URL,
-    private readonly fetchImpl: typeof fetch = globalThis.fetch,
+    // Без bind браузер бросает «Illegal invocation» при вызове сохранённого fetch.
+    private readonly fetchImpl: typeof fetch = globalThis.fetch.bind(globalThis),
   ) {}
 
   private async get(path: string, signal?: AbortSignal): Promise<string | null> {
@@ -32,6 +33,11 @@ export class DataBranchReader {
           throw new Error(`${path}:${i + 1}: invalid JSON`);
         }
       });
+  }
+
+  /** Текстовый файл; отсутствующий — null. */
+  async readText(path: string, signal?: AbortSignal): Promise<string | null> {
+    return this.get(path, signal);
   }
 
   async readJson<T>(path: string, signal?: AbortSignal): Promise<T | null> {

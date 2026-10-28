@@ -1,0 +1,55 @@
+name: Pages
+
+# Публикует экран терминала на GitHub Pages (https://tsum323.github.io/trading/) при каждом
+# изменении main. Сайт статический: свечи браузер берёт с публичного API Binance, журнал и
+# сигналы — из ветки `data` (raw.githubusercontent.com).
+# Однократная настройка: Settings → Pages → Build and deployment → Source: GitHub Actions.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Build static site
+        run: npx next build
+        env:
+          PAGES_BASE_PATH: /trading
+          NEXT_TELEMETRY_DISABLED: "1"
+      # Диагностика: разрешает ли Binance запросы из браузера с этого сайта (CORS). Не влияет на сборку.
+      - name: Check Binance CORS for the site origin
+        run: |
+          curl -sS -m 20 -D - -o /dev/null -H "Origin: https://tsum323.github.io" \
+            "https://data-api.binance.vision/api/v3/klines?symbol=BTCUSDT&interval=1h&limit=1" \
+            | grep -i -E "^HTTP|access-control-allow-origin" || echo "no CORS header in the response"
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: out
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

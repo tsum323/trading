@@ -1,4 +1,4 @@
-import { isTimeframe, TIMEFRAME_MS, type Timeframe, type UnixMs } from "@/core/time";
+import { TIMEFRAME_MS, type Timeframe, type UnixMs } from "@/core/time";
 import { DEFAULT_COSTS, runBacktest, type SignalOutcome, type Trade } from "@/modules/backtest";
 import { atr, ema } from "@/modules/indicators";
 import type { Candle } from "@/modules/market-data";
@@ -11,19 +11,6 @@ export const TERMINAL_TIMEFRAMES: readonly Timeframe[] = ["15m", "1h", "4h", "1d
 export const VISIBLE_CANDLES = 500;
 export const MAX_CANDLES = 5000;
 const INDICATOR_WARMUP = 250;
-
-export type CandleRequest = { symbol: string; timeframe: Timeframe; count: number };
-
-/** Проверка параметров /api/candles. Только символы вида BASE/QUOTE из латиницы и цифр. */
-export function parseCandleRequest(params: URLSearchParams): CandleRequest | { error: string } {
-  const symbol = (params.get("symbol") ?? "").toUpperCase();
-  const timeframe = params.get("timeframe") ?? "";
-  const count = Number(params.get("count") ?? VISIBLE_CANDLES);
-  if (!/^[A-Z0-9]{2,12}\/[A-Z0-9]{2,12}$/.test(symbol)) return { error: "symbol must look like BTC/USDT" };
-  if (!isTimeframe(timeframe)) return { error: "unsupported timeframe" };
-  if (!Number.isInteger(count) || count < 1 || count > MAX_CANDLES) return { error: `count must be an integer in [1, ${MAX_CANDLES}]` };
-  return { symbol, timeframe, count };
-}
 
 /**
  * Стратегии, работающие на этом таймфрейме, с ключами реестра. Ключ, а не id:

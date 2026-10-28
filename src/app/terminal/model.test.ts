@@ -3,25 +3,9 @@ import { TIMEFRAME_MS } from "@/core/time";
 import type { SignalOutcome } from "@/modules/backtest";
 import type { TradingSignal } from "@/modules/strategies";
 import { FIXTURE_SOURCE, makeCandles, sawtooth } from "@/test/fixtures";
-import { buildOverlays, candleCount, chartTime, marketSummary, MAX_CANDLES, parseCandleRequest, signalMarkers, strategiesFor, VISIBLE_CANDLES } from "./model";
+import { buildOverlays, candleCount, chartTime, marketSummary, MAX_CANDLES, signalMarkers, strategiesFor, VISIBLE_CANDLES } from "./model";
 
 const H = TIMEFRAME_MS["1h"];
-
-describe("parseCandleRequest", () => {
-  const parse = (q: string) => parseCandleRequest(new URLSearchParams(q));
-
-  it("accepts a valid request and normalizes the symbol", () => {
-    expect(parse("symbol=btc/usdt&timeframe=1h&count=300")).toEqual({ symbol: "BTC/USDT", timeframe: "1h", count: 300 });
-  });
-
-  it("rejects bad symbols, timeframes and counts", () => {
-    expect(parse("symbol=BTCUSDT&timeframe=1h")).toHaveProperty("error");
-    expect(parse("symbol=BTC/USDT;drop&timeframe=1h")).toHaveProperty("error");
-    expect(parse("symbol=BTC/USDT&timeframe=2h")).toHaveProperty("error");
-    expect(parse(`symbol=BTC/USDT&timeframe=1h&count=${MAX_CANDLES + 1}`)).toHaveProperty("error");
-    expect(parse("symbol=BTC/USDT&timeframe=1h&count=1.5")).toHaveProperty("error");
-  });
-});
 
 describe("candleCount", () => {
   it("adds the longest strategy lookback for the timeframe to the visible window", () => {

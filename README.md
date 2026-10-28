@@ -27,7 +27,13 @@ npm run dev       # http://localhost:3000
 
 ## Экран терминала
 
-`npm run dev` (или `npm run build && npm start`) и открыть http://localhost:3000:
+**Сайт:** https://tsum323.github.io/trading/ — публикуется автоматически при каждом
+изменении `main` (`.github/workflows/pages.yml`). Однократная настройка репозитория:
+Settings → Pages → Build and deployment → Source: **GitHub Actions**.
+
+Локально: `npm run dev` (или `npm run build && npm start`) и открыть http://localhost:3000.
+
+На экране:
 
 - свечной график BTC, ETH, SOL, BNB, XRP на 15m / 1h / 4h / 1d с публичного API
   Binance; обновляется каждые 30 с, формирующаяся свеча показана приглушённо;
@@ -38,13 +44,20 @@ npm run dev       # http://localhost:3000
 - калькулятор размера позиции по доле риска с учётом комиссий;
 - журнал исследований с вердиктами.
 
-Котировки не подставляются: если Binance недоступен, график пуст и показана
-ошибка. Переменные окружения (необязательные):
+Данные загружает сам браузер: свечи — с публичного API Binance, журнал и
+сигналы — из ветки `data` через raw.githubusercontent.com. Если Binance из
+браузера недоступен, показываются реальные 15m-свечи символов перспективного
+теста из ветки `data` (при необходимости собранные в 1h/4h/1d) с явным
+предупреждением и временем последней свечи. Котировки не подставляются: если
+данных нет нигде, график пуст и показана ошибка.
+
+Переменные сборки (необязательные):
 
 | Переменная | По умолчанию | Зачем |
 |---|---|---|
-| `BINANCE_BASE_URL` | `https://data-api.binance.vision` | другой адрес публичного API |
-| `DATA_BRANCH_URL` | `https://raw.githubusercontent.com/tsum323/trading/data` | откуда читать журнал и сигналы |
+| `NEXT_PUBLIC_BINANCE_BASE_URL` | `https://data-api.binance.vision` | другой адрес публичного API |
+| `NEXT_PUBLIC_DATA_BRANCH_URL` | `https://raw.githubusercontent.com/tsum323/trading/data` | откуда читать журнал, сигналы и запасные свечи |
+| `PAGES_BASE_PATH` | — | сборка статического сайта (`/trading` для GitHub Pages) |
 
 ## Команды
 
