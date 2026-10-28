@@ -27,37 +27,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-
-      - name: Check out the data branch
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if git ls-remote --exit-code --heads origin data >/dev/null; then
-            git fetch --depth=1 origin data:refs/remotes/origin/data
-            git worktree add -B data archive origin/data
-          else
-            git worktree add --orphan -b data archive
-          fi
+      - run: scripts/checkout-data.sh archive
 
       - name: Run one cycle
         run: npm run live -- --archive archive --symbols "$SYMBOLS"
         env:
           SYMBOLS: ${{ inputs.symbols || 'BTC/USDT,ETH/USDT' }}
-          NEXT_TELEMETRY_DISABLED: "1"
 
       - name: Commit and push
-        working-directory: archive
-        run: |
-          git add -A
-          if git diff --cached --quiet; then
-            echo "No changes"
-            exit 0
-          fi
-          git commit -q -m "data: live cycle $(date -u +%Y-%m-%dT%H:%MZ) (code ${GITHUB_SHA::7})"
-          git push origin data
+        run: scripts/commit-data.sh archive "data: live cycle $(date -u +%Y-%m-%dT%H:%MZ) (code ${GITHUB_SHA::7})"

@@ -18,7 +18,8 @@
     "check": "npm run typecheck && npm run lint && npm run test",
     "ingest": "tsx scripts/ingest.ts",
     "backtest": "tsx scripts/backtest.ts",
-    "live": "tsx scripts/live.ts"
+    "live": "tsx scripts/live.ts",
+    "research": "tsx scripts/research.ts"
   },
   "dependencies": {
     "next": "16.4.3",

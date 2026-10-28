@@ -1,0 +1,60 @@
+name: Research backtest
+
+# Исторический прогон trend-pullback на одной части зафиксированного разбиения
+# 60/20/20 (docs/validation-plan.md §2). Запускается только вручную.
+# Разбиение создаётся при первом запуске и хранится в research/split.json ветки `data`;
+# каждый прогон дописывается в research/journal.jsonl. Отложенная часть (holdout)
+# проверяется один раз на версию стратегии — повторный запуск будет отклонён.
+
+on:
+  workflow_dispatch:
+    inputs:
+      segment:
+        description: "Часть разбиения"
+        type: choice
+        options: [research, validation, holdout]
+        default: research
+      symbols:
+        description: "Символы через запятую"
+        default: "BTC/USDT,ETH/USDT"
+      from:
+        description: "Начало периода (только при первом запуске; по умолчанию — 24 месяца до начала текущего месяца)"
+        required: false
+      to:
+        description: "Конец периода, не включительно (только при первом запуске; по умолчанию — начало текущего месяца)"
+        required: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: research-backtest
+  cancel-in-progress: false
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: scripts/checkout-data.sh archive
+
+      - name: Run backtest
+        run: |
+          args=(--archive archive --segment "$SEGMENT" --symbols "$SYMBOLS")
+          if [ -n "$FROM" ]; then args+=(--from "$FROM"); fi
+          if [ -n "$TO" ]; then args+=(--to "$TO"); fi
+          npm run research -- "${args[@]}"
+        env:
+          SEGMENT: ${{ inputs.segment }}
+          SYMBOLS: ${{ inputs.symbols }}
+          FROM: ${{ inputs.from }}
+          TO: ${{ inputs.to }}
+
+      - name: Commit and push
+        run: scripts/commit-data.sh archive "research: ${{ inputs.segment }} $(date -u +%Y-%m-%dT%H:%MZ) (code ${GITHUB_SHA::7})"
