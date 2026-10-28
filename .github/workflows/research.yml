@@ -57,4 +57,7 @@ jobs:
           TO: ${{ inputs.to }}
 
       - name: Commit and push
-        run: scripts/commit-data.sh archive "research: ${{ inputs.segment }} $(date -u +%Y-%m-%dT%H:%MZ) (code ${GITHUB_SHA::7})"
+        run: |
+          scripts/commit-data.sh archive "research: $SEGMENT $(date -u +%Y-%m-%dT%H:%MZ) (code ${GITHUB_SHA::7})"
+        env:
+          SEGMENT: ${{ inputs.segment }}

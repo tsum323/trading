@@ -41,4 +41,5 @@ jobs:
           SYMBOLS: ${{ inputs.symbols || 'BTC/USDT,ETH/USDT' }}
 
       - name: Commit and push
-        run: scripts/commit-data.sh archive "data: live cycle $(date -u +%Y-%m-%dT%H:%MZ) (code ${GITHUB_SHA::7})"
+        run: |
+          scripts/commit-data.sh archive "data: live cycle $(date -u +%Y-%m-%dT%H:%MZ) (code ${GITHUB_SHA::7})"
