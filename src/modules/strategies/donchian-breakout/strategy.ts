@@ -16,6 +16,8 @@ export interface DonchianBreakoutParams {
   expiryBars: number;
   /** Окно расчёта; длинное, чтобы EMA не зависела от начального значения. */
   lookback: number;
+  /** Только long-сигналы (§9). */
+  longOnly: boolean;
 }
 
 export const DEFAULT_PARAMS: DonchianBreakoutParams = {
@@ -27,6 +29,7 @@ export const DEFAULT_PARAMS: DonchianBreakoutParams = {
   targetR: 3,
   expiryBars: 72,
   lookback: 1000,
+  longOnly: false,
 };
 
 export const STRATEGY_ID = "donchian-breakout";
@@ -74,7 +77,7 @@ export function donchianBreakout(overrides: Partial<DonchianBreakoutParams> = {}
       const atrNow = atrInd.compute(candles)[n - 1];
       if (trend == null || atrNow == null || atrNow <= 0) return null;
       const ref = cur.close;
-      const direction = ref > high && ref > trend ? "long" : ref < low && ref < trend ? "short" : null;
+      const direction = ref > high && ref > trend ? "long" : !p.longOnly && ref < low && ref < trend ? "short" : null;
       if (!direction) return null;
       const sign = direction === "long" ? 1 : -1;
 

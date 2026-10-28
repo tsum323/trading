@@ -7,6 +7,7 @@ const STRATEGIES: Record<string, () => Strategy> = {
   "trend-pullback": () => trendPullback(),
   "donchian-breakout": () => donchianBreakout(),
   "donchian-breakout-4h": () => donchianBreakout({ timeframe: "4h" }),
+  "donchian-breakout-4h-long": () => donchianBreakout({ timeframe: "4h", longOnly: true }),
 };
 
 export const STRATEGY_IDS = Object.keys(STRATEGIES);

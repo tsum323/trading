@@ -50,6 +50,21 @@ describe("donchian-breakout: version and registry", () => {
     expect([s.id, s.version, s.timeframe, s.warmup]).toEqual(["donchian-breakout", `${BASE_VERSION}+timeframe=4h`, "4h", 1000]);
   });
 
+  it("registers the 4h long-only variant (spec §9)", () => {
+    const s = getStrategy("donchian-breakout-4h-long");
+    expect([s.id, s.version, s.timeframe]).toEqual(["donchian-breakout", `${BASE_VERSION}+timeframe=4h,longOnly=true`, "4h"]);
+  });
+
+  it("long-only emits no shorts and keeps the long signals of the same candles", () => {
+    const candles = series(700, -0.6);
+    const both = replaySignals(donchianBreakout(SMALL), candles);
+    const longOnly = replaySignals(donchianBreakout({ ...SMALL, longOnly: true }), candles);
+    expect(both.some((s) => s.direction === "short")).toBe(true);
+    expect(longOnly.every((s) => s.direction === "long")).toBe(true);
+    // Реплей без правила «одного открытого» — сигналы long совпадают по свечам.
+    expect(longOnly.map((s) => s.basisCloseTime)).toEqual(both.filter((s) => s.direction === "long").map((s) => s.basisCloseTime));
+  });
+
   it("scales expiry with the timeframe", () => {
     const s4 = donchianBreakout({ ...SMALL, timeframe: "4h" });
     const candles = series(700, 0.6).map((c, i) => ({ ...c, timeframe: "4h" as const, openTime: T0 + i * 4 * H, closeTime: T0 + (i + 1) * 4 * H }));
