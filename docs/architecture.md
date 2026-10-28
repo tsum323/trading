@@ -76,7 +76,7 @@
 | `backtest` | срез «на момент», реплей, оценка исходов (`evaluateSignal`), прогон с правилом одного открытого сигнала (`runBacktest`), статистика и бутстреп (`summarize`), случайная базовая линия (`randomBaseline`), критерии отказа (`judge`) | не подгружает данные сам | market-data, strategies, risk |
 | `ai-analysis` | интерфейс `MarketExplainer` | не создаёт и не меняет сигналы, не участвует в бэктесте | strategies (типы) |
 | `storage` | схема SQLite, миграции, чтение/запись | не содержит бизнес-логики | market-data, strategies (типы) |
-| `services` | сценарии, связывающие модули: загрузка истории (`ingestHistory`) | не содержит доменной логики индикаторов/стратегий | market-data, storage |
+| `services` | сценарии, связывающие модули: загрузка истории (`ingestHistory`), цикл перспективного теста (`runLiveCycle`) и его отчёт | не содержит доменной логики индикаторов/стратегий | market-data, storage, backtest, strategies |
 
 ### Источник данных: Binance Spot
 
@@ -127,7 +127,18 @@ interface MarketExplainer {
 
 ## Формат хранения
 
-Схема: `src/modules/storage/schema.ts`. Время — `INTEGER` UTC ms, цены —
+Два хранилища с общим интерфейсом свечей (`upsertCandles` / `getCandles`):
+
+- **SQLite** (`SqliteStore`) — локальная база для исследований, описана ниже.
+- **Текстовый архив** (`FileArchive`) — для хранения в git, ветка `data`,
+  куда пишет перспективный тест: `candles/<source>/<BASE-QUOTE>/<tf>/<YYYY-MM>.csv`
+  (`open_time,open,high,low,close,volume`, только закрытые свечи, записанная
+  свеча не меняется), журналы `signals/<strategy>.jsonl` (`LiveSignalRecord`:
+  сигнал, `recordedAt`, `codeCommit`, `late`) и `outcomes/<strategy>.jsonl`
+  (`SignalOutcome`), отчёт `reports/<strategy>.md`. Текст вместо бинарной
+  базы — чтобы частые коммиты давали маленькие дельты.
+
+Схема SQLite: `src/modules/storage/schema.ts`. Время — `INTEGER` UTC ms, цены —
 `REAL`. Версия схемы — `PRAGMA user_version`.
 
 **candles** — ключ `(source, symbol, timeframe, open_time)`.

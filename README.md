@@ -38,6 +38,7 @@ npm run dev       # http://localhost:3000
 | `npm run check` | typecheck + lint + test |
 | `npm run ingest -- …` | загрузка истории свечей в SQLite (см. ниже) |
 | `npm run backtest -- …` | исторический прогон `trend-pullback` (см. ниже) |
+| `npm run live -- …` | один цикл перспективного теста (см. ниже) |
 
 ## Загрузка истории
 
@@ -86,6 +87,26 @@ npm run backtest -- --symbol BTC/USDT --from 2024-01-01 --to 2024-07-01
 Отчёт — не доказательство прибыльности: вывод действителен только для
 однократного прогона на отложенной выборке и перспективного теста.
 
+## Перспективный тест (автоматически)
+
+`.github/workflows/live.yml` запускается каждые 15 минут на GitHub Actions:
+догружает закрытые свечи BTC/USDT и ETH/USDT, записывает новые сигналы
+`trend-pullback`, оценивает исходы и коммитит всё в ветку **`data`**:
+
+```
+candles/binance-spot/BTC-USDT/15m/2024-10.csv   закрытые свечи по месяцам
+signals/trend-pullback.jsonl                    сигналы (только дописываются)
+outcomes/trend-pullback.jsonl                   исходы
+reports/trend-pullback.md                       текущий отчёт
+```
+
+- Включается сам после слияния в `main`; запустить вручную можно на вкладке
+  Actions → Live forward test → Run workflow.
+- Первый запуск загружает 30 дней истории для прогрева и сигналов не даёт.
+- GitHub отключает запланированные workflow в публичном репозитории после
+  60 дней без активности в нём — тогда их включают снова на вкладке Actions.
+- Локально тот же цикл: `npm run live -- --archive <каталог>`.
+
 ## Структура
 
 ```
@@ -104,6 +125,7 @@ src/
   test/fixtures.ts     синтетические свечи ТОЛЬКО для тестов
 scripts/ingest.ts      CLI загрузки истории
 scripts/backtest.ts    CLI исторического прогона
+scripts/live.ts        один цикл перспективного теста
 docs/
   architecture.md      компоненты, поток данных, форматы хранения
   strategy-spec.md     первая исследовательская гипотеза
