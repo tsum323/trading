@@ -157,7 +157,7 @@ export function Terminal() {
         <Stat
           label="Обновлено"
           value={candles.state === "ready" ? fmtTime(candles.data.fetchedAt) : "—"}
-          sub={candles.state === "ready" && candles.data.origin === "data-branch" ? "UTC, свечи из ветки data" : "UTC, Binance Spot"}
+          sub={candles.state === "ready" && candles.data.origin === "data-branch" ? "МСК, свечи из ветки data" : "МСК, Binance Spot"}
         />
       </section>
 
@@ -233,7 +233,7 @@ function LiveSignals({ overview, rows }: { overview: Load<Overview>; rows: { sig
   return (
     <div className="table-wrap">
       <table>
-        <thead><tr><th>Решение, UTC</th><th>Стратегия</th><th>Напр.</th><th>Вход ≈</th><th>Стоп</th><th>Цель</th><th>Исход</th><th>R</th></tr></thead>
+        <thead><tr><th>Решение, МСК</th><th>Стратегия</th><th>Напр.</th><th>Вход ≈</th><th>Стоп</th><th>Цель</th><th>Исход</th><th>R</th></tr></thead>
         <tbody>
           {[...rows].reverse().map(({ signal: s, late, outcome }) => (
             <tr key={s.id}>
@@ -270,7 +270,7 @@ function Journal({ overview }: { overview: Load<Overview> }) {
       ) : (
         <div className="table-wrap">
           <table>
-            <thead><tr><th>Запуск, UTC</th><th>Стратегия</th><th>Символы</th><th>Часть</th><th>Сделок</th><th>Матожидание</th><th>95% CI</th><th>Без издержек</th><th>Случайные p95</th><th>Вердикт</th></tr></thead>
+            <thead><tr><th>Запуск, МСК</th><th>Стратегия</th><th>Символы</th><th>Часть</th><th>Сделок</th><th>Матожидание</th><th>95% CI</th><th>Без издержек</th><th>Случайные p95</th><th>Вердикт</th></tr></thead>
             <tbody>
               {[...journal].reverse().map((e) => (
                 <tr key={configurationKey(e) + e.at + e.segment}>

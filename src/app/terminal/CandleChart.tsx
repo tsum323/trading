@@ -13,6 +13,7 @@ import {
   type UTCTimestamp,
 } from "lightweight-charts";
 import { useEffect, useRef } from "react";
+import { formatClock, formatDateTime, formatDayMonth } from "@/core/time";
 import type { Candle } from "@/modules/market-data";
 import { chartTime, type ChartMarker, type MarkerKind, type Overlays } from "./model";
 
@@ -49,9 +50,20 @@ export function CandleChart({ candles, overlays, show, markers, resetKey }: Prop
       layout: { background: { type: ColorType.Solid, color: css("--surface") }, textColor: css("--text-muted"), fontFamily: css("--font-mono") },
       grid: { vertLines: { color: css("--grid") }, horzLines: { color: css("--grid") } },
       rightPriceScale: { borderColor: css("--border") },
-      timeScale: { borderColor: css("--border"), timeVisible: true, secondsVisible: false },
+      timeScale: {
+        borderColor: css("--border"),
+        timeVisible: true,
+        secondsVisible: false,
+        // TickMarkType: 0 год, 1 месяц, 2 день, 3+ время.
+        tickMarkFormatter: (t: Time, type: number) => {
+          const ms = (t as number) * 1000;
+          if (type <= 1) return formatDateTime(ms).slice(0, type === 0 ? 4 : 7);
+          return type === 2 ? formatDayMonth(ms) : formatClock(ms);
+        },
+      },
       crosshair: { mode: 0 },
-      localization: { locale: "ru-RU" },
+      // Время на шкале и в перекрестии — по Москве; сами данные остаются в UTC.
+      localization: { locale: "ru-RU", timeFormatter: (t: Time) => formatDateTime((t as number) * 1000) },
     });
     const up = css("--up");
     const down = css("--down");

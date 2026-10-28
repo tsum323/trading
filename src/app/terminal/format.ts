@@ -1,3 +1,5 @@
+import { formatDateTime } from "@/core/time";
+
 const nf = new Map<number, Intl.NumberFormat>();
 
 export function fmtNum(x: number | null | undefined, digits = 2): string {
@@ -28,9 +30,10 @@ export function fmtR(x: number | null | undefined): string {
   return `${x > 0 ? "+" : ""}${fmtNum(x, 3)} R`;
 }
 
+/** Дата и время по Москве (МСК). */
 export function fmtTime(ms: number | null | undefined): string {
   if (ms == null) return "—";
-  return new Date(ms).toISOString().slice(0, 16).replace("T", " ");
+  return formatDateTime(ms);
 }
 
 export const fmtDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);

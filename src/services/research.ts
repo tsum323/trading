@@ -1,4 +1,4 @@
-import { TIMEFRAME_MS, type UnixMs } from "@/core/time";
+import { formatDateTime, TIMEFRAME_MS, type UnixMs } from "@/core/time";
 import {
   combineBaselines,
   judge,
@@ -275,7 +275,7 @@ export function renderResearchReport(r: ResearchResult, plan: SplitPlan, journal
   const lines = [
     `# Исследование: ${r.strategyId}@${r.strategyVersion} — часть «${r.segment}»`,
     "",
-    `Запуск: ${new Date(meta.at).toISOString().slice(0, 16).replace("T", " ")} UTC, код ${meta.codeCommit?.slice(0, 7) ?? "—"}.`,
+    `Запуск: ${formatDateTime(meta.at)} МСК, код ${meta.codeCommit?.slice(0, 7) ?? "—"}.`,
     `Период части: ${day(r.range.from)} .. ${day(r.range.to)} (не включительно).`,
     `Разбиение (зафиксировано ${day(plan.createdAt)}): research ${day(plan.from)}..${day(plan.researchEnd)}, ` +
       `validation ..${day(plan.validationEnd)}, holdout ..${day(plan.to)}.`,

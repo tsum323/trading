@@ -1,9 +1,10 @@
+import { formatDateTime } from "@/core/time";
 import { summarize, type SignalOutcome } from "@/modules/backtest";
 import type { FileArchive } from "@/modules/storage";
 import type { Strategy } from "@/modules/strategies";
 import { outcomesLog, signalsLog, type LiveSignalRecord, type SymbolCycleReport } from "./live-cycle";
 
-const iso = (t: number | null) => (t === null ? "—" : new Date(t).toISOString().slice(0, 16).replace("T", " "));
+const iso = (t: number | null) => (t === null ? "—" : formatDateTime(t));
 const r3 = (x: number) => (Number.isFinite(x) ? x.toFixed(3) : String(x));
 
 /** Markdown-отчёт перспективного теста. Запоздалые сигналы показаны, но в статистику не входят. */
@@ -17,7 +18,7 @@ export function renderLiveReport(archive: FileArchive, strategy: Strategy, cycle
   const lines = [
     `# Перспективный тест: ${strategy.id}@${strategy.version}`,
     "",
-    `Обновлено: ${iso(generatedAt)} UTC. Сигналы формируются на живых публичных данных и только дописываются.`,
+    `Обновлено: ${iso(generatedAt)} МСК. Сигналы формируются на живых публичных данных и только дописываются.`,
     "",
     "> Это не доказательство прибыльности. Минимум для выводов — 8 недель и 50 сигналов",
     "> (docs/validation-plan.md §6). Исполнения ордеров нет.",

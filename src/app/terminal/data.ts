@@ -94,7 +94,7 @@ export async function loadCandles(
     origin: "data-branch",
     notice:
       `Binance недоступен из этого браузера (${binanceError}). Показаны реальные свечи из ветки data — ` +
-      `последняя закрытая ${fmtTime(candles.at(-1)!.closeTime)} UTC. Там хранятся только символы перспективного теста, ` +
+      `последняя закрытая ${fmtTime(candles.at(-1)!.closeTime)} МСК. Там хранятся только символы перспективного теста, ` +
       "и обновляются они, пока тот запускается.",
   };
 }
