@@ -138,7 +138,10 @@ function signalPersona(
     }
   }
   for (const s of skips) {
-    feed.push({ t: s.createdAt, personaId: persona.id, kind: "skip", symbol: s.symbol, direction: s.direction, reason: s.reason, drawdown: s.drawdown, mode: s.mode });
+    feed.push({
+      t: s.createdAt, personaId: persona.id, kind: "skip", symbol: s.symbol, direction: s.direction, reason: s.reason, drawdown: s.drawdown,
+      ...(s.rewardRisk !== undefined ? { rewardRisk: s.rewardRisk } : {}), ...(s.costShare !== undefined ? { costShare: s.costShare } : {}), mode: s.mode,
+    });
   }
 
   const closed = trades.filter((t) => t.exitTime !== null && t.state !== "no-entry" && t.state !== "data-gap");
@@ -161,7 +164,9 @@ function signalPersona(
     holdings: [], cash: null, rebalances: [], allocations: [],
     risk: {
       status: rs.status, riskFraction: rs.riskFraction, drawdownPct: rs.drawdown, pausedUntil: rs.pausedUntil,
-      dayPnlPct: rs.dayPnlPct, cooling, skipped: skips.length,
+      dayPnlPct: rs.dayPnlPct, cooling,
+      skipped: skips.filter((s) => s.reason !== "not-worth").length,
+      notWorth: skips.filter((s) => s.reason === "not-worth").length,
     },
   };
 }

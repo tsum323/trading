@@ -69,6 +69,8 @@ export interface PersonaRiskView {
   cooling: string[];
   /** Сигналов пропущено ради защиты капитала. */
   skipped: number;
+  /** Сигналов пропущено как невыгодные. */
+  notWorth: number;
 }
 
 export interface PersonaAllocation {
@@ -115,7 +117,7 @@ export type FeedEvent =
   | { t: UnixMs; personaId: string; kind: "open"; symbol: MarketSymbol; direction: SignalDirection; price: number | null; stop: number; target: number; mode: TradeMode }
   | { t: UnixMs; personaId: string; kind: "close"; symbol: MarketSymbol; direction: SignalDirection; state: TradeState; price: number | null; pnlUsd: number; r: number | null; mode: TradeMode }
   | { t: UnixMs; personaId: string; kind: "rebalance"; weights: Record<MarketSymbol, number>; note: string; mode: TradeMode }
-  | { t: UnixMs; personaId: string; kind: "skip"; symbol: MarketSymbol; direction: SignalDirection; reason: "paused" | "daily-stop" | "risk-cap"; drawdown: number; mode: TradeMode };
+  | { t: UnixMs; personaId: string; kind: "skip"; symbol: MarketSymbol; direction: SignalDirection; reason: "paused" | "daily-stop" | "risk-cap" | "not-worth"; drawdown: number; rewardRisk?: number; costShare?: number; mode: TradeMode };
 
 export interface PersonasSnapshot {
   generatedAt: UnixMs;

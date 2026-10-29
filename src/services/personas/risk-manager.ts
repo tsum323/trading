@@ -27,6 +27,10 @@ export const RISK_RULES = {
   adaptMinTrades: 3,
   /** Множитель риска, если по монете и направлению последние сделки в минусе. */
   coolingFactor: 0.25,
+  /** Сделка стоит входа: до цели хотя бы в 1,5 раза дальше, чем до стопа… */
+  minRewardRisk: 1.5,
+  /** …и издержки входа и выхода съедают не больше трети ожидаемой прибыли. */
+  maxCostShare: 1 / 3,
 } as const;
 
 const DAY = 24 * 3_600_000;
@@ -93,7 +97,25 @@ export function recentBucketR(closed: readonly ClosedTrade[], t: UnixMs, symbol:
   return bucket.length < RISK_RULES.adaptMinTrades ? null : bucket.reduce((s, c) => s + c.r, 0);
 }
 
-export type SkipReason = "paused" | "daily-stop" | "risk-cap";
+export type SkipReason = "paused" | "daily-stop" | "risk-cap" | "not-worth";
+
+/**
+ * Выгодна ли сделка до входа: отношение пути до цели к пути до стопа и доля
+ * издержек (комиссия и проскальзывание на входе и выходе) в прибыли по цели.
+ */
+export function tradeEdge(
+  signal: { direction: SignalDirection; entry: { referencePrice: number }; stopLoss: number; takeProfits: readonly number[] },
+  costs: { feeRate: number; slippage: number },
+): { rewardRisk: number; costShare: number; worth: boolean } {
+  const ref = signal.entry.referencePrice;
+  const target = signal.takeProfits[0]!;
+  const reward = Math.abs(target - ref);
+  const risk = Math.abs(ref - signal.stopLoss);
+  const cost = (costs.feeRate + costs.slippage) * ref + costs.feeRate * target;
+  const rewardRisk = risk > 0 ? reward / risk : 0;
+  const costShare = reward > 0 ? cost / reward : Number.POSITIVE_INFINITY;
+  return { rewardRisk, costShare, worth: rewardRisk >= RISK_RULES.minRewardRisk && costShare <= RISK_RULES.maxCostShare };
+}
 
 export type RiskDecision =
   | { skip: SkipReason; state: RiskState }

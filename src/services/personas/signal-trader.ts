@@ -4,7 +4,7 @@ import type { Candle, MarketDataSourceId, MarketSymbol } from "@/modules/market-
 import { lossPerUnit } from "@/modules/risk";
 import type { FileArchive } from "@/modules/storage";
 import type { Strategy, TradingSignal } from "@/modules/strategies";
-import { decideRisk, type ClosedTrade, type SkipReason } from "./risk-manager";
+import { decideRisk, tradeEdge, type ClosedTrade, type SkipReason } from "./risk-manager";
 import { MAX_POSITION_SHARE, type SignalPersonaDef } from "./roster";
 import type { TradeMode } from "./types";
 
@@ -35,6 +35,9 @@ export interface PersonaSkip {
   createdAt: UnixMs;
   reason: SkipReason;
   drawdown: number;
+  /** Для «not-worth»: путь до цели к пути до стопа и доля издержек в прибыли. */
+  rewardRisk?: number;
+  costShare?: number;
   recordedAt: UnixMs;
   mode: TradeMode;
 }
@@ -84,7 +87,7 @@ function freeFrom(signal: TradingSignal, e: Evaluation): UnixMs {
 /**
  * Один цикл персонажа на сигналах стратегии:
  * 1. новые решения после прошлого цикла (при первом запуске — после старта счетов `start`);
- * 2. по символу не больше одной позиции;
+ * 2. по символу не больше одной позиции; невыгодные сделки (tradeEdge) пропускаются;
  * 3. размер — по правилам защиты капитала (risk-manager): риск по просадке, дневной стоп, пауза,
  *    лимит открытого риска и (для адаптивных) охлаждение; номинал не больше MAX_POSITION_SHARE;
  * 4. исходы — тем же оценщиком, что и в исследованиях (вход по open следующей свечи, издержки).
@@ -156,6 +159,15 @@ export function runSignalTrader(opts: {
       }
     }
     const mode: TradeMode = s.createdAt + size < cursor.launchedAt ? "replay" : now - s.createdAt > size ? "late" : "live";
+    // Невыгодная сделка: цель слишком близко к стопу или издержки съедают прибыль.
+    const edge = tradeEdge(s, DEFAULT_COSTS);
+    if (!edge.worth) {
+      newSkips.push({
+        signalId: s.id, symbol: s.symbol, direction: s.direction, createdAt: s.createdAt, reason: "not-worth", drawdown: 0,
+        rewardRisk: edge.rewardRisk, costShare: edge.costShare, recordedAt: now, mode,
+      });
+      continue;
+    }
     const d = decideRisk({ closed, t: s.createdAt, symbol: s.symbol, direction: s.direction, openRiskUsd, adaptive: persona.adaptive });
     if (d.skip) {
       newSkips.push({ signalId: s.id, symbol: s.symbol, direction: s.direction, createdAt: s.createdAt, reason: d.skip, drawdown: d.state.drawdown, recordedAt: now, mode });

@@ -31,14 +31,14 @@ function candles(symbol: string, timeframe: "1h" | "1d", from: number, n: number
   });
 }
 
-/** Тестовая стратегия: лонг на каждой свече, стоп −1%, цель +1%, срок 3 свечи. Не торговая идея. */
+/** Тестовая стратегия: лонг на каждой свече, стоп −1%, цель +2%, срок 10 свечей. Не торговая идея. */
 const everyBar: Strategy = {
   id: "test-every-bar", version: "0", timeframe: "1h", warmup: 2, lookback: 3,
   evaluate(ctx) {
     const c = ctx.candles.at(-1)!;
     return {
       basisCloseTime: c.closeTime, direction: "long", entry: { type: "next-open", referencePrice: c.close },
-      stopLoss: c.close * 0.99, takeProfits: [c.close * 1.01], expiresAt: c.closeTime + 3 * H, features: {}, rule: "test",
+      stopLoss: c.close * 0.99, takeProfits: [c.close * 1.02], expiresAt: c.closeTime + 10 * H, features: {}, rule: "test",
     };
   },
 };
@@ -57,7 +57,7 @@ describe("personas", () => {
   afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
   describe("signal trader", () => {
-    // Рост 0,3% за час: каждая сделка доходит до цели +1% за несколько свечей.
+    // Рост 0,3% за час: каждая сделка доходит до цели +2% за несколько свечей.
     const up = (i: number) => 100 * 1.003 ** i;
 
     it("replays from the start, keeps one position per symbol and sizes by 1% risk", () => {
@@ -89,6 +89,21 @@ describe("personas", () => {
       expect(firstExit.status).toBe("target");
       expect(firstExit.pnlUsd).toBeGreaterThan(0);
       expect(r.newEntries[1]!.equityAtEntry).toBeCloseTo(INITIAL_EQUITY + firstExit.pnlUsd, 9);
+    });
+
+    it("skips trades that are not worth it: target too close or eaten by costs", () => {
+      const nearTarget: Strategy = {
+        ...everyBar,
+        evaluate(ctx) {
+          const d = everyBar.evaluate(ctx)!;
+          return { ...d, takeProfits: [d.entry.referencePrice * 1.01] };
+        },
+      };
+      archive.upsertCandles(candles("A/USDT", "1h", START - 5 * H, 30, up));
+      const r = runSignalTrader({ archive, sourceId: FIXTURE_SOURCE, persona: signalPersona, strategy: nearTarget, start: START, now: START + 25 * H + 1, codeCommit: null });
+      expect(r.newEntries).toEqual([]);
+      expect(r.newSkips.length).toBeGreaterThan(0);
+      expect(r.newSkips.every((x) => x.reason === "not-worth" && x.rewardRisk! < 1.5)).toBe(true);
     });
 
     it("only appends: a repeated cycle without new candles records nothing", () => {

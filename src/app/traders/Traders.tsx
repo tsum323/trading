@@ -146,7 +146,10 @@ function feedText(e: FeedEvent, p: PersonaSummary | undefined, names: (id: strin
   if (e.kind === "skip") {
     return {
       title: `Пропустил ${DIRECTION_LABEL[e.direction]} ${coin(e.symbol)}: ${SKIP_LABEL[e.reason]}`,
-      detail: `защита капитала · просадка ${fmtPct(e.drawdown, 1)}`,
+      detail:
+        e.reason === "not-worth"
+          ? `цель/стоп ${fmtNum(e.rewardRisk ?? 0, 2)} (нужно ≥ 1,5) · издержки ${fmtPct(Math.min(e.costShare ?? 0, 9.99), 0).replace("+", "")} прибыли (нужно ≤ 33%)`
+          : `защита капитала · просадка ${fmtPct(e.drawdown, 1)}`,
     };
   }
   if (p?.kind === "manager") return { title: `Распределил: ${weightsText(e.weights, names)}`, detail: e.note };
@@ -244,6 +247,7 @@ function RiskPanel({ p }: { p: PersonaSummary }) {
         <dt>За последние 24 часа</dt><dd className={tone(r.dayPnlPct)}>{fmtPct(r.dayPnlPct, 2)}</dd>
         <dt>На охлаждении</dt><dd>{r.cooling.length === 0 ? "нет" : r.cooling.join(", ")}</dd>
         <dt>Пропущено сигналов ради защиты</dt><dd>{r.skipped}</dd>
+        <dt>Пропущено невыгодных сигналов</dt><dd>{r.notWorth}</dd>
       </dl>
     </>
   );

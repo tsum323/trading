@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { curveAt, managerCurve, managerWeights, type ManagerRebalance } from "./manager-trader";
-import { decideRisk, riskState, RISK_RULES, type ClosedTrade } from "./risk-manager";
+import { decideRisk, riskState, RISK_RULES, tradeEdge, type ClosedTrade } from "./risk-manager";
 import { INITIAL_EQUITY, type ManagerPersonaDef } from "./roster";
 
 /** Старт счетов в тестах. */
@@ -58,6 +58,25 @@ describe("risk manager", () => {
     const cut = decideRisk({ closed: [], t: T, symbol: "BTC/USDT", direction: "long", openRiskUsd: 250, adaptive: false });
     expect(cut.skip === null && cut.riskFraction).toBeCloseTo(0.005, 12);
     expect(decideRisk({ closed: [], t: T, symbol: "BTC/USDT", direction: "long", openRiskUsd: 290, adaptive: false }).skip).toBe("risk-cap");
+  });
+});
+
+describe("trade edge", () => {
+  const costs = { feeRate: 0.001, slippage: 0.0002 };
+  const sig = (stopLoss: number, target: number) => ({ direction: "long" as const, entry: { referencePrice: 100 }, stopLoss, takeProfits: [target] });
+
+  it("requires the target at least 1.5× as far as the stop", () => {
+    expect(tradeEdge(sig(98, 104), costs)).toMatchObject({ rewardRisk: 2, worth: true });
+    expect(tradeEdge(sig(98, 102), costs)).toMatchObject({ rewardRisk: 1, worth: false });
+  });
+
+  it("rejects trades whose costs eat more than a third of the profit", () => {
+    // Цель +0,6, стоп −0,3: 2R, но издержки ≈ 0,22 из 0,6.
+    const tight = tradeEdge(sig(99.7, 100.6), costs);
+    expect(tight.rewardRisk).toBeCloseTo(2, 9);
+    expect(tight.costShare).toBeCloseTo((0.0012 * 100 + 0.001 * 100.6) / 0.6, 9);
+    expect(tight.worth).toBe(false);
+    expect(tradeEdge(sig(97, 106), costs).worth).toBe(true);
   });
 });
 
