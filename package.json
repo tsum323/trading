@@ -19,6 +19,7 @@
     "ingest": "tsx scripts/ingest.ts",
     "backtest": "tsx scripts/backtest.ts",
     "live": "tsx scripts/live.ts",
+    "personas": "tsx scripts/personas.ts",
     "research": "tsx scripts/research.ts"
   },
   "dependencies": {

@@ -1,12 +1,10 @@
+import { SiteHeader } from "./SiteHeader";
 import { Terminal } from "./terminal/Terminal";
 
 export default function HomePage() {
   return (
     <main className="page">
-      <header className="header">
-        <h1>Trading Research Terminal</h1>
-        <span className="hint">Публичные данные Binance Spot · время МСК</span>
-      </header>
+      <SiteHeader current="terminal" />
       <p className="notice">
         <b>Только исследование.</b> Исполнения ордеров нет, торговые ключи не используются. Ни одна стратегия пока
         не прошла проверку (см. журнал внизу) — сигналы и реплей нельзя считать торговыми рекомендациями.
