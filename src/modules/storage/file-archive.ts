@@ -102,6 +102,12 @@ export class FileArchive {
     appendFileSync(path, records.map((r) => `${JSON.stringify(r)}\n`).join(""));
   }
 
+  /** JSON-файл состояния; отсутствующий — undefined. */
+  readJson<T>(name: string): T | undefined {
+    const path = join(this.root, name);
+    return existsSync(path) ? (JSON.parse(readFileSync(path, "utf8")) as T) : undefined;
+  }
+
   writeText(name: string, content: string): void {
     const path = join(this.root, name);
     mkdirSync(dirname(path), { recursive: true });

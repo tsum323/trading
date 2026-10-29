@@ -1,4 +1,6 @@
 import { donchianBreakout } from "./donchian-breakout";
+import { meanReversion } from "./mean-reversion";
+import { randomEntry } from "./random-entry";
 import { trendPullback } from "./trend-pullback";
 import type { Strategy } from "./types";
 
@@ -8,6 +10,8 @@ const STRATEGIES: Record<string, () => Strategy> = {
   "donchian-breakout": () => donchianBreakout(),
   "donchian-breakout-4h": () => donchianBreakout({ timeframe: "4h" }),
   "donchian-breakout-4h-long": () => donchianBreakout({ timeframe: "4h", longOnly: true }),
+  "mean-reversion": () => meanReversion(),
+  "random-entry": () => randomEntry(),
 };
 
 export const STRATEGY_IDS = Object.keys(STRATEGIES);
