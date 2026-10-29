@@ -228,6 +228,7 @@ docs/
   strategy-spec.md     trend-pullback (15m) — отвергнута
   strategy-donchian-breakout.md  donchian-breakout (1h) — зафиксирована до прогона
   strategy-crowding.md факторы фьючерсов: crowding и фильтр открытого интереса — до прогона
+  strategy-rotation.md недельная ротация по силе на 8 монетах — до прогона
   validation-plan.md   правила исторического и перспективного тестирования
   personas.md          виртуальные трейдеры: правила, учёт счетов, ограничения
 ```
