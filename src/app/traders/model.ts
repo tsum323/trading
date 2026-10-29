@@ -1,7 +1,7 @@
-import type { FeedEvent, PersonaSummary, TradeState } from "@/services/personas/types";
+import type { FeedEvent, PersonaSummary, RiskStatus, TradeState } from "@/services/personas/types";
 
 /** Цвета персонажей по фиксированному порядку ростера (не по месту в рейтинге). */
-export const PERSONA_COLOR_VARS = ["--p-1", "--p-2", "--p-3", "--p-4", "--p-5", "--p-6"] as const;
+export const PERSONA_COLOR_VARS = ["--p-1", "--p-2", "--p-3", "--p-4", "--p-5", "--p-6", "--p-7"] as const;
 
 export function colorVarFor(personaIds: readonly string[], id: string): string {
   const i = personaIds.indexOf(id);
@@ -34,10 +34,25 @@ export function winRate(p: PersonaSummary): number | null {
   return p.closedTrades === 0 ? null : p.wins / p.closedTrades;
 }
 
-export function weightsText(weights: Record<string, number>): string {
+export const RISK_STATUS_LABEL: Record<RiskStatus, string> = {
+  normal: "обычный риск",
+  cautious: "осторожно",
+  defensive: "защита",
+  "daily-stop": "дневной стоп",
+  paused: "пауза",
+};
+
+export const SKIP_LABEL = {
+  paused: "пауза после просадки",
+  "daily-stop": "дневной стоп",
+  "risk-cap": "лимит открытого риска",
+} as const;
+
+/** Доли портфеля; `label` — подпись ключа (монета или имя персонажа). */
+export function weightsText(weights: Record<string, number>, label: (key: string) => string = coin): string {
   const parts = Object.entries(weights)
     .filter(([, w]) => w > 0)
-    .map(([s, w]) => `${coin(s)} ${Math.round(w * 100)}%`);
+    .map(([s, w]) => `${label(s)} ${Math.round(w * 100)}%`);
   if (parts.length === 0) return "всё в долларах";
   const cash = 1 - Object.values(weights).reduce((s, w) => s + w, 0);
   if (cash > 0.005) parts.push(`$ ${Math.round(cash * 100)}%`);

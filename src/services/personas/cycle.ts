@@ -3,10 +3,11 @@ import type { Gap, MarketDataSource, MarketSymbol } from "@/modules/market-data"
 import type { FileArchive } from "@/modules/storage";
 import { getStrategy } from "@/modules/strategies/registry";
 import { ingestHistory } from "../ingest-history";
+import { runManagerTrader } from "./manager-trader";
 import { runPortfolioTrader } from "./portfolio-trader";
 import { PERSONA_START, PERSONAS } from "./roster";
 import { runSignalTrader } from "./signal-trader";
-import { buildPersonasSnapshot } from "./snapshot";
+import { buildBoard, buildPersonasSnapshot, curvesOf } from "./snapshot";
 import { PERSONAS_STATE_PATH, type PersonasSnapshot } from "./types";
 
 /** Запас дневных свечей до старта: окно импульса Ротатора (28 дн.) с запасом. */
@@ -14,7 +15,7 @@ const DAILY_WARMUP_BARS = 40;
 
 export interface PersonasCycleReport {
   ingest: { symbol: MarketSymbol; timeframe: Timeframe; received: number; gaps: Gap[] }[];
-  personas: { id: string; newEntries: number; newExits: number; rebalances: number }[];
+  personas: { id: string; newEntries: number; newExits: number; newSkips: number; rebalances: number }[];
   snapshot: PersonasSnapshot;
 }
 
@@ -32,7 +33,7 @@ export function requiredSeries(): Map<string, { symbol: MarketSymbol; timeframe:
       if (p.kind === "signals") {
         const strategy = getStrategy(p.strategyKey);
         add(s, strategy.timeframe, strategy.lookback + 1);
-      } else {
+      } else if (p.kind === "portfolio") {
         add(s, "1d", DAILY_WARMUP_BARS);
       }
     }
@@ -71,11 +72,20 @@ export async function runPersonasCycle(opts: {
   for (const p of PERSONAS) {
     if (p.kind === "signals") {
       const r = runSignalTrader({ archive, sourceId: source.id, persona: p, strategy: getStrategy(p.strategyKey), now: now(), codeCommit });
-      personas.push({ id: p.id, newEntries: r.newEntries.length, newExits: r.newExits.length, rebalances: 0 });
-    } else {
+      personas.push({ id: p.id, newEntries: r.newEntries.length, newExits: r.newExits.length, newSkips: r.newSkips.length, rebalances: 0 });
+    } else if (p.kind === "portfolio") {
       const r = runPortfolioTrader({ archive, sourceId: source.id, persona: p, now: now(), codeCommit });
-      personas.push({ id: p.id, newEntries: 0, newExits: 0, rebalances: r.length });
+      personas.push({ id: p.id, newEntries: 0, newExits: 0, newSkips: 0, rebalances: r.length });
     }
+  }
+  // Управляющий решает по кривым капитала остальных, посчитанным после их хода.
+  const board = buildBoard(archive, source.id);
+  const curves = curvesOf(board.summaries);
+  const names = new Map(PERSONAS.map((p) => [p.id, p.name]));
+  for (const p of PERSONAS) {
+    if (p.kind !== "manager") continue;
+    const r = runManagerTrader({ archive, persona: p, curves, names, until: board.until, now: now(), codeCommit });
+    personas.push({ id: p.id, newEntries: 0, newExits: 0, newSkips: 0, rebalances: r.length });
   }
 
   const snapshot = buildPersonasSnapshot(archive, source.id, now(), codeCommit);

@@ -22,6 +22,7 @@
   --p-4: #eda100;
   --p-5: #e87ba4;
   --p-6: #6250d6;
+  --p-7: #008300;
   --radius: 10px;
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
@@ -52,6 +53,7 @@
     --p-4: #c98500;
     --p-5: #d55181;
     --p-6: #9085e9;
+    --p-7: #008300;
     color-scheme: dark;
   }
 }
@@ -203,3 +205,7 @@ td.wrap { white-space: normal; min-width: 220px; font-family: var(--font-sans); 
 .feed-amount { font: 600 13px var(--font-mono); }
 .feed-time { font: 11px var(--font-mono); color: var(--text-muted); white-space: nowrap; }
 .more { margin-top: 8px; width: 100%; cursor: pointer; }
+.risk-badge { justify-self: start; font-size: 11px; padding: 1px 8px; border-radius: 999px; background: var(--surface-2); color: var(--text-muted); }
+.risk-badge.risk-cautious { color: var(--warn); }
+.risk-badge.risk-defensive, .risk-badge.risk-daily-stop, .risk-badge.risk-paused { color: var(--bad); }
+.kv dd .risk-badge { display: inline-block; }

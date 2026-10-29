@@ -3,9 +3,22 @@ import { DEFAULT_COSTS } from "@/modules/backtest";
 import type { Candle, MarketDataSourceId, MarketSymbol } from "@/modules/market-data";
 import type { FileArchive } from "@/modules/storage";
 import { getStrategy } from "@/modules/strategies/registry";
+import { managerCurve, type Curve, type ManagerRebalance } from "./manager-trader";
 import type { Rebalance } from "./portfolio-trader";
-import { INITIAL_EQUITY, MAX_POSITION_SHARE, PERSONA_START, PERSONA_SYMBOLS, PERSONAS, RISK_PER_TRADE, type PersonaDef } from "./roster";
-import { lowerBound, personaPath, type PersonaCursor, type PersonaEntry, type PersonaExit } from "./signal-trader";
+import { recentBucketR, riskState, type ClosedTrade } from "./risk-manager";
+import {
+  INITIAL_EQUITY,
+  MAX_POSITION_SHARE,
+  PERSONA_START,
+  PERSONA_SYMBOLS,
+  PERSONAS,
+  RISK_PER_TRADE,
+  type ManagerPersonaDef,
+  type PersonaDef,
+  type PortfolioPersonaDef,
+  type SignalPersonaDef,
+} from "./roster";
+import { lowerBound, personaPath, type PersonaCursor, type PersonaEntry, type PersonaExit, type PersonaSkip } from "./signal-trader";
 import type { FeedEvent, PersonaHolding, PersonaSummary, PersonaTrade, PersonasSnapshot } from "./types";
 
 const CURVE_STEP = TIMEFRAME_MS["4h"];
@@ -40,7 +53,7 @@ function curveGrid(until: UnixMs): UnixMs[] {
   return out;
 }
 
-function maxDrawdownPct(curve: [UnixMs, number][]): number {
+function maxDrawdownPct(curve: Curve): number {
   let peak = Number.NEGATIVE_INFINITY;
   let worst = 0;
   for (const [, v] of curve) {
@@ -52,10 +65,19 @@ function maxDrawdownPct(curve: [UnixMs, number][]): number {
 
 const slip = (price: number, side: 1 | -1) => price * (1 + side * DEFAULT_COSTS.slippage);
 
+function base(p: PersonaDef, launchedAt: UnixMs | null, curve: [UnixMs, number][]) {
+  const equity = curve.at(-1)![1];
+  return {
+    id: p.id, name: p.name, emoji: p.emoji, tagline: p.tagline, rules: p.rules, kind: p.kind,
+    timeframe: p.timeframe, symbols: p.symbols, launchedAt,
+    equity, returnPct: equity / INITIAL_EQUITY - 1, maxDrawdownPct: maxDrawdownPct(curve), curve,
+  };
+}
+
 function signalPersona(
   archive: FileArchive,
   sourceId: MarketDataSourceId,
-  persona: Extract<PersonaDef, { kind: "signals" }>,
+  persona: SignalPersonaDef,
   prices: PriceBook,
   until: UnixMs,
   feed: FeedEvent[],
@@ -64,6 +86,7 @@ function signalPersona(
   const cursor = archive.readJson<PersonaCursor>(personaPath(persona.id, "cursor.json"));
   const entries = archive.readJsonl<PersonaEntry>(personaPath(persona.id, "entries"));
   const exits = new Map(archive.readJsonl<PersonaExit>(personaPath(persona.id, "exits")).map((x) => [x.signalId, x]));
+  const skips = archive.readJsonl<PersonaSkip>(personaPath(persona.id, "skips"));
   const tf = strategy.timeframe;
   const series = new Map<MarketSymbol, Candle[]>();
   const candlesOf = (symbol: MarketSymbol) => {
@@ -75,25 +98,26 @@ function signalPersona(
     const s = e.signal;
     const sign = s.direction === "long" ? 1 : -1;
     const x = exits.get(s.id);
-    const base = {
+    const common = {
       symbol: s.symbol, direction: s.direction, decidedAt: s.createdAt, entryTime: s.basisCloseTime,
-      stop: s.stopLoss, target: s.takeProfits[0]!, expiresAt: s.expiresAt, qty: e.qty, riskUsd: e.riskUsd, mode: e.mode,
+      stop: s.stopLoss, target: s.takeProfits[0]!, expiresAt: s.expiresAt, qty: e.qty, riskUsd: e.riskUsd,
+      riskFraction: e.riskFraction ?? e.riskUsd / e.equityAtEntry, notes: e.notes ?? [], mode: e.mode,
     };
     if (x) {
       return {
-        ...base, state: x.status, entryPrice: x.entryPrice ?? null, exitTime: x.exitTime ?? null, exitPrice: x.exitPrice ?? null,
+        ...common, state: x.status, entryPrice: x.entryPrice ?? null, exitTime: x.exitTime ?? null, exitPrice: x.exitPrice ?? null,
         pnlUsd: x.pnlUsd, r: x.rMultiple ?? null,
       };
     }
     const c = candlesOf(s.symbol);
     const entryCandle = c[lowerBound(c, s.basisCloseTime)];
     if (!entryCandle || entryCandle.openTime !== s.basisCloseTime) {
-      return { ...base, state: "waiting-entry", entryPrice: null, exitTime: null, exitPrice: null, pnlUsd: null, r: null };
+      return { ...common, state: "waiting-entry", entryPrice: null, exitTime: null, exitPrice: null, pnlUsd: null, r: null };
     }
     const entryPrice = slip(entryCandle.open, sign as 1 | -1);
     const last = prices.at(s.symbol, until);
     const pnlUsd = last === null ? null : (sign * (last - entryPrice) - DEFAULT_COSTS.feeRate * entryPrice) * e.qty;
-    return { ...base, state: "open", entryPrice, exitTime: null, exitPrice: null, pnlUsd, r: pnlUsd === null ? null : pnlUsd / e.riskUsd };
+    return { ...common, state: "open", entryPrice, exitTime: null, exitPrice: null, pnlUsd, r: pnlUsd === null ? null : pnlUsd / e.riskUsd };
   });
 
   const curve: [UnixMs, number][] = curveGrid(until).map((t) => {
@@ -116,32 +140,36 @@ function signalPersona(
       feed.push({ t: tr.exitTime, personaId: persona.id, kind: "close", symbol: tr.symbol, direction: tr.direction, state: tr.state, price: tr.exitPrice, pnlUsd: tr.pnlUsd ?? 0, r: tr.r, mode: tr.mode });
     }
   }
+  for (const s of skips) {
+    feed.push({ t: s.createdAt, personaId: persona.id, kind: "skip", symbol: s.symbol, direction: s.direction, reason: s.reason, drawdown: s.drawdown, mode: s.mode });
+  }
 
   const closed = trades.filter((t) => t.exitTime !== null && t.state !== "no-entry" && t.state !== "data-gap");
-  const equity = curve.at(-1)![1];
+  const closedForRisk: ClosedTrade[] = closed.map((t) => ({ symbol: t.symbol, direction: t.direction, exitTime: t.exitTime!, pnlUsd: t.pnlUsd ?? 0, r: t.r ?? 0 }));
+  const rs = riskState(closedForRisk, until);
+  const cooling = persona.adaptive
+    ? persona.symbols.flatMap((sym) =>
+        (["long", "short"] as const).filter((d) => (recentBucketR(closedForRisk, until, sym, d) ?? 0) < 0).map((d) => `${sym.split("/")[0]} ${d}`),
+      )
+    : [];
   return {
-    id: persona.id, name: persona.name, emoji: persona.emoji, tagline: persona.tagline, rules: persona.rules, kind: persona.kind,
-    timeframe: tf, symbols: persona.symbols, strategyKey: persona.strategyKey, strategyVersion: strategy.version,
-    launchedAt: cursor?.launchedAt ?? null,
-    equity, returnPct: equity / INITIAL_EQUITY - 1, maxDrawdownPct: maxDrawdownPct(curve),
+    ...base(persona, cursor?.launchedAt ?? null, curve),
+    strategyKey: persona.strategyKey, strategyVersion: strategy.version,
     closedTrades: closed.length,
     wins: closed.filter((t) => (t.pnlUsd ?? 0) > 0).length,
     losses: closed.filter((t) => (t.pnlUsd ?? 0) <= 0).length,
     liveClosedTrades: closed.filter((t) => t.mode === "live").length,
-    curve,
     open: trades.filter((t) => t.state === "open" || t.state === "waiting-entry"),
     history: closed.slice(-MAX_HISTORY).reverse(),
-    holdings: [], cash: null, rebalances: [],
+    holdings: [], cash: null, rebalances: [], allocations: [],
+    risk: {
+      status: rs.status, riskFraction: rs.riskFraction, drawdownPct: rs.drawdown, pausedUntil: rs.pausedUntil,
+      dayPnlPct: rs.dayPnlPct, cooling, skipped: skips.length,
+    },
   };
 }
 
-function portfolioPersona(
-  archive: FileArchive,
-  persona: Extract<PersonaDef, { kind: "portfolio" }>,
-  prices: PriceBook,
-  until: UnixMs,
-  feed: FeedEvent[],
-): PersonaSummary {
+function portfolioPersona(archive: FileArchive, persona: PortfolioPersonaDef, prices: PriceBook, until: UnixMs, feed: FeedEvent[]): PersonaSummary {
   const cursor = archive.readJson<{ launchedAt: UnixMs }>(personaPath(persona.id, "cursor.json"));
   const log = archive.readJsonl<Rebalance>(personaPath(persona.id, "rebalances"));
   const valueAt = (r: Rebalance | undefined, t: UnixMs) =>
@@ -157,29 +185,75 @@ function portfolioPersona(
     return { symbol, qty, price, value: qty * price };
   });
   for (const r of log) feed.push({ t: r.at, personaId: persona.id, kind: "rebalance", weights: r.weights, note: r.note, mode: r.mode });
-  const equity = curve.at(-1)![1];
   return {
-    id: persona.id, name: persona.name, emoji: persona.emoji, tagline: persona.tagline, rules: persona.rules, kind: persona.kind,
-    timeframe: persona.timeframe, symbols: persona.symbols, strategyKey: null, strategyVersion: null,
-    launchedAt: cursor?.launchedAt ?? null,
-    equity, returnPct: equity / INITIAL_EQUITY - 1, maxDrawdownPct: maxDrawdownPct(curve),
+    ...base(persona, cursor?.launchedAt ?? null, curve),
+    strategyKey: null, strategyVersion: null,
     closedTrades: 0, wins: 0, losses: 0, liveClosedTrades: 0,
-    curve, open: [], history: [], holdings, cash: lastR?.cash ?? INITIAL_EQUITY,
+    open: [], history: [], holdings, cash: lastR?.cash ?? INITIAL_EQUITY,
     rebalances: log.slice(-20).reverse().map((r) => ({ at: r.at, weights: r.weights, costUsd: r.costUsd, note: r.note, mode: r.mode })),
+    risk: null, allocations: [],
   };
 }
 
-/** Сводка для сайта: состояние счетов, кривые капитала и лента действий. */
-export function buildPersonasSnapshot(archive: FileArchive, sourceId: MarketDataSourceId, now: UnixMs, codeCommit: string | null): PersonasSnapshot {
+export function managerSummary(
+  archive: FileArchive,
+  persona: ManagerPersonaDef,
+  curves: ReadonlyMap<string, Curve>,
+  until: UnixMs,
+  feed: FeedEvent[],
+): PersonaSummary {
+  const cursor = archive.readJson<{ launchedAt: UnixMs }>(personaPath(persona.id, "cursor.json"));
+  const log = archive.readJsonl<ManagerRebalance>(personaPath(persona.id, "rebalances"));
+  const m = managerCurve(log, curves, curveGrid(until));
+  for (const r of log) feed.push({ t: r.at, personaId: persona.id, kind: "rebalance", weights: r.weights, note: r.note, mode: r.mode });
+  return {
+    ...base(persona, cursor?.launchedAt ?? null, m.curve),
+    strategyKey: null, strategyVersion: null,
+    closedTrades: 0, wins: 0, losses: 0, liveClosedTrades: 0,
+    open: [], history: [], holdings: [], cash: m.cash,
+    rebalances: log.map((r, k) => ({ at: r.at, weights: r.weights, costUsd: m.costs[k] ?? 0, note: r.note, mode: r.mode })).slice(-20).reverse(),
+    risk: null,
+    allocations: Object.entries(m.allocations).map(([personaId, value]) => ({ personaId, value })),
+  };
+}
+
+export interface PersonaBoard {
+  prices: PriceBook;
+  until: UnixMs;
+  summaries: PersonaSummary[];
+  feed: FeedEvent[];
+  /** Последние закрытые часовые свечи по символам. */
+  lastCandles: Map<MarketSymbol, Candle>;
+}
+
+/** Сводки персонажей, кроме Управляющего: ему нужны их кривые капитала. */
+export function buildBoard(archive: FileArchive, sourceId: MarketDataSourceId): PersonaBoard {
   const symbols = [...new Set([...PERSONA_SYMBOLS, ...PERSONAS.flatMap((p) => p.symbols)])];
   const hourly = new Map(symbols.map((s) => [s, archive.getCandles(sourceId, { symbol: s, timeframe: "1h", from: PERSONA_START - TIMEFRAME_MS["1d"] })]));
   const prices = new PriceBook(hourly);
   // Последний момент, на который есть цены по всем символам.
   const until = Math.max(PERSONA_START, Math.min(...symbols.map((s) => prices.last(s)?.closeTime ?? PERSONA_START)));
   const feed: FeedEvent[] = [];
-  const personas = PERSONAS.map((p) =>
-    p.kind === "signals" ? signalPersona(archive, sourceId, p, prices, until, feed) : portfolioPersona(archive, p, prices, until, feed),
+  const summaries = PERSONAS.flatMap((p) =>
+    p.kind === "signals" ? [signalPersona(archive, sourceId, p, prices, until, feed)]
+    : p.kind === "portfolio" ? [portfolioPersona(archive, p, prices, until, feed)]
+    : [],
   );
+  const lastCandles = new Map(symbols.flatMap((s) => {
+    const c = prices.last(s);
+    return c ? [[s, c] as const] : [];
+  }));
+  return { prices, until, summaries, feed, lastCandles };
+}
+
+export const curvesOf = (summaries: readonly PersonaSummary[]) => new Map(summaries.map((p) => [p.id, p.curve as Curve]));
+
+/** Сводка для сайта: состояние счетов, кривые капитала и лента действий. Управляющие — по готовым кривым. */
+export function buildPersonasSnapshot(archive: FileArchive, sourceId: MarketDataSourceId, now: UnixMs, codeCommit: string | null): PersonasSnapshot {
+  const board = buildBoard(archive, sourceId);
+  const curves = curvesOf(board.summaries);
+  const managers = PERSONAS.filter((p): p is ManagerPersonaDef => p.kind === "manager").map((p) => managerSummary(archive, p, curves, board.until, board.feed));
+  const byId = new Map([...board.summaries, ...managers].map((p) => [p.id, p]));
   return {
     generatedAt: now,
     startedAt: PERSONA_START,
@@ -188,13 +262,8 @@ export function buildPersonasSnapshot(archive: FileArchive, sourceId: MarketData
     maxPositionShare: MAX_POSITION_SHARE,
     costs: { ...DEFAULT_COSTS },
     codeCommit,
-    prices: Object.fromEntries(
-      symbols.flatMap((s) => {
-        const c = prices.last(s);
-        return c ? [[s, { price: c.close, time: c.closeTime }]] : [];
-      }),
-    ),
-    personas,
-    feed: feed.sort((a, b) => b.t - a.t).slice(0, MAX_FEED),
+    prices: Object.fromEntries([...board.lastCandles].map(([s, c]) => [s, { price: c.close, time: c.closeTime }])),
+    personas: PERSONAS.map((p) => byId.get(p.id)!),
+    feed: board.feed.sort((a, b) => b.t - a.t).slice(0, MAX_FEED),
   };
 }

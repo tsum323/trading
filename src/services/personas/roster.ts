@@ -30,6 +30,8 @@ export interface SignalPersonaDef extends PersonaBase {
   kind: "signals";
   /** Ключ в реестре стратегий. */
   strategyKey: string;
+  /** Снижать риск по монете и направлению, где последние сделки в минусе (контроль — без этого). */
+  adaptive: boolean;
 }
 
 export interface PortfolioPersonaDef extends PersonaBase {
@@ -39,9 +41,21 @@ export interface PortfolioPersonaDef extends PersonaBase {
   allocation: { type: "fixed"; weights: Record<MarketSymbol, number> } | { type: "momentum"; lookbackDays: number; top: number };
 }
 
-export type PersonaDef = SignalPersonaDef | PortfolioPersonaDef;
+/** Распределяет капитал между другими персонажами по их недавним результатам. */
+export interface ManagerPersonaDef extends PersonaBase {
+  kind: "manager";
+  /** Между кем делить капитал. */
+  candidates: string[];
+  lookbackDays: number;
+  maxWeight: number;
+}
 
-const RISK_RULE = "Риск 1% капитала на сделку, позиция не больше 20% капитала. Комиссия 0,1% и проскальзывание 0,02% на сторону.";
+export type PersonaDef = SignalPersonaDef | PortfolioPersonaDef | ManagerPersonaDef;
+
+const RISK_RULE = "Цель — вырастить счёт и не потерять его. Риск 1% капитала на сделку; при просадке от максимума −10% — 0,5%, при −20% — 0,25%.";
+const PROTECTION_RULE = "Защита: за 24 часа потерял больше 3% — новых сделок нет; просадка −30% — пауза на неделю. Открытый риск всех позиций — не больше 3%, позиция — не больше 20% капитала.";
+const ADAPT_RULE = "Учится на своих сделках: если по монете и направлению последние сделки (3–5) в сумме в минусе, рискует вчетверо меньше, пока не начнёт получаться.";
+const COST_RULE = "Комиссия 0,1% и проскальзывание 0,02% на сторону.";
 
 export const PERSONAS: PersonaDef[] = [
   {
@@ -51,6 +65,7 @@ export const PERSONAS: PersonaDef[] = [
     tagline: "Входит на пробое канала и едет по тренду",
     kind: "signals",
     strategyKey: "donchian-breakout-4h",
+    adaptive: true,
     timeframe: "4h",
     symbols: PERSONA_SYMBOLS,
     rules: [
@@ -58,6 +73,9 @@ export const PERSONAS: PersonaDef[] = [
       "Покупает, когда свеча закрылась выше максимума последних 48 свечей (8 дней) и выше EMA 200; продаёт в шорт зеркально.",
       "Стоп — 2 ATR от входа, цель — 3 риска (3R), сделка закрывается через 72 свечи (12 дней), если ничего не сработало.",
       RISK_RULE,
+      PROTECTION_RULE,
+      ADAPT_RULE,
+      COST_RULE,
     ],
   },
   {
@@ -67,6 +85,7 @@ export const PERSONAS: PersonaDef[] = [
     tagline: "Ждёт отката внутри тренда и стреляет",
     kind: "signals",
     strategyKey: "trend-pullback",
+    adaptive: true,
     timeframe: "15m",
     symbols: PERSONA_SYMBOLS,
     rules: [
@@ -75,6 +94,9 @@ export const PERSONAS: PersonaDef[] = [
       "Пропускает слишком тихий и слишком бурный рынок (ATR вне 20–80-го перцентиля за 30 дней).",
       "Стоп — за экстремумом отката, цель — 2R, срок — 4 часа.",
       RISK_RULE,
+      PROTECTION_RULE,
+      ADAPT_RULE,
+      COST_RULE,
     ],
   },
   {
@@ -84,6 +106,7 @@ export const PERSONAS: PersonaDef[] = [
     tagline: "Покупает панику, продаёт эйфорию",
     kind: "signals",
     strategyKey: "mean-reversion",
+    adaptive: true,
     timeframe: "1h",
     symbols: PERSONA_SYMBOLS,
     rules: [
@@ -91,6 +114,9 @@ export const PERSONAS: PersonaDef[] = [
       "Покупает, когда цена закрылась ниже нижней полосы Боллинджера (20, 2σ) и RSI 14 ниже 30; продаёт в шорт выше верхней полосы при RSI выше 70.",
       "Цель — средняя линия полос, стоп — 1,5 ATR, срок — 24 часа.",
       RISK_RULE,
+      PROTECTION_RULE,
+      ADAPT_RULE,
+      COST_RULE,
     ],
   },
   {
@@ -100,6 +126,7 @@ export const PERSONAS: PersonaDef[] = [
     tagline: "Входит наугад — контроль для остальных",
     kind: "signals",
     strategyKey: "random-entry",
+    adaptive: false,
     timeframe: "4h",
     symbols: PERSONA_SYMBOLS,
     rules: [
@@ -107,6 +134,9 @@ export const PERSONAS: PersonaDef[] = [
       "Выходы как у Трендовика: стоп 2 ATR, цель 3R, срок 12 дней.",
       "Если стратегия не обгоняет Монетку, её «преимущество» — случайность.",
       RISK_RULE,
+      PROTECTION_RULE,
+      "Не учится на своих сделках — иначе перестала бы быть контролем.",
+      COST_RULE,
     ],
   },
   {
@@ -138,6 +168,24 @@ export const PERSONAS: PersonaDef[] = [
     rules: [
       "1 октября 2026 купил BTC на весь капитал и держит.",
       "Эталон «ничего не делать»: активный стиль имеет смысл, только если обгоняет его.",
+    ],
+  },
+  {
+    id: "manager",
+    name: "Управляющий",
+    emoji: "🧠",
+    tagline: "Даёт деньги тем, у кого получается",
+    kind: "manager",
+    candidates: ["trend", "sniper", "contrarian", "rotator", "holder"],
+    lookbackDays: 28,
+    maxWeight: 0.4,
+    timeframe: "1d",
+    symbols: PERSONA_SYMBOLS,
+    rules: [
+      "Сам сделок не ищет: делит капитал между Трендовиком, Снайпером, Контрарианцем, Ротатором и Холдером (Монетка — контроль, ей денег не даёт).",
+      "Каждый понедельник в 03:00 МСК смотрит, кто сколько заработал за последние 28 дней, и даёт деньги тем, кто в плюсе, — пропорционально результату, не больше 40% одному.",
+      "Если в плюсе никого, держит доллары. На старте — поровну между всеми.",
+      "Перераспределение стоит как сделка: комиссия и проскальзывание с переставленной суммы.",
     ],
   },
 ];

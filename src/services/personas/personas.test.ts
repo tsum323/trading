@@ -42,7 +42,7 @@ const everyBar: Strategy = {
 };
 
 const signalPersona: SignalPersonaDef = {
-  id: "t", name: "T", emoji: "🧪", tagline: "", rules: [], kind: "signals", strategyKey: "-", timeframe: "1h", symbols: ["A/USDT"],
+  id: "t", name: "T", emoji: "🧪", tagline: "", rules: [], kind: "signals", strategyKey: "-", adaptive: false, timeframe: "1h", symbols: ["A/USDT"],
 };
 
 describe("personas", () => {

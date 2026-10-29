@@ -26,6 +26,10 @@ export interface PersonaTrade {
   expiresAt: UnixMs;
   qty: number;
   riskUsd: number;
+  /** Доля капитала под риском в этой сделке. */
+  riskFraction: number;
+  /** Почему риск отличается от обычного (просадка, охлаждение, лимиты). */
+  notes: string[];
   state: TradeState;
   exitTime: UnixMs | null;
   exitPrice: number | null;
@@ -50,13 +54,34 @@ export interface PersonaRebalanceView {
   mode: TradeMode;
 }
 
+export type RiskStatus = "normal" | "cautious" | "defensive" | "daily-stop" | "paused";
+
+export interface PersonaRiskView {
+  status: RiskStatus;
+  /** Риск на следующую сделку по просадке (без охлаждения). */
+  riskFraction: number;
+  /** Просадка реализованного капитала от максимума. */
+  drawdownPct: number;
+  pausedUntil: UnixMs | null;
+  dayPnlPct: number;
+  /** Монеты и направления на охлаждении, например «SOL short». */
+  cooling: string[];
+  /** Сигналов пропущено ради защиты капитала. */
+  skipped: number;
+}
+
+export interface PersonaAllocation {
+  personaId: string;
+  value: number;
+}
+
 export interface PersonaSummary {
   id: string;
   name: string;
   emoji: string;
   tagline: string;
   rules: string[];
-  kind: "signals" | "portfolio";
+  kind: "signals" | "portfolio" | "manager";
   timeframe: Timeframe;
   symbols: MarketSymbol[];
   /** Ключ стратегии в реестре (для персонажей на сигналах). */
@@ -77,13 +102,19 @@ export interface PersonaSummary {
   history: PersonaTrade[];
   holdings: PersonaHolding[];
   cash: number | null;
+  /** Ключи weights — символы (портфели) или id персонажей (Управляющий). */
   rebalances: PersonaRebalanceView[];
+  /** Состояние защиты капитала (персонажи на сигналах). */
+  risk: PersonaRiskView | null;
+  /** Деньги Управляющего у персонажей. */
+  allocations: PersonaAllocation[];
 }
 
 export type FeedEvent =
   | { t: UnixMs; personaId: string; kind: "open"; symbol: MarketSymbol; direction: SignalDirection; price: number | null; stop: number; target: number; mode: TradeMode }
   | { t: UnixMs; personaId: string; kind: "close"; symbol: MarketSymbol; direction: SignalDirection; state: TradeState; price: number | null; pnlUsd: number; r: number | null; mode: TradeMode }
-  | { t: UnixMs; personaId: string; kind: "rebalance"; weights: Record<MarketSymbol, number>; note: string; mode: TradeMode };
+  | { t: UnixMs; personaId: string; kind: "rebalance"; weights: Record<MarketSymbol, number>; note: string; mode: TradeMode }
+  | { t: UnixMs; personaId: string; kind: "skip"; symbol: MarketSymbol; direction: SignalDirection; reason: "paused" | "daily-stop" | "risk-cap"; drawdown: number; mode: TradeMode };
 
 export interface PersonasSnapshot {
   generatedAt: UnixMs;

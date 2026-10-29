@@ -32,7 +32,7 @@ async function main() {
     const r = report.personas.find((x) => x.id === p.id)!;
     console.log(
       `${p.emoji} ${p.name}: $${p.equity.toFixed(2)} (${(p.returnPct * 100).toFixed(2)}%), closed ${p.closedTrades}, open ${p.open.length}` +
-        ` | this cycle: +${r.newEntries} entries, +${r.newExits} exits, ${r.rebalances} rebalances`,
+        ` | this cycle: +${r.newEntries} entries, +${r.newExits} exits, +${r.newSkips} skips, ${r.rebalances} rebalances`,
     );
   }
   console.log(`Snapshot at ${formatDateTime(report.snapshot.generatedAt)} MSK`);

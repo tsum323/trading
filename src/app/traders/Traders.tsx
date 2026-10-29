@@ -13,6 +13,8 @@ import {
   filterFeed,
   MIN_TRADES_FOR_RANKING,
   rankPersonas,
+  RISK_STATUS_LABEL,
+  SKIP_LABEL,
   sparklinePoints,
   STATE_LABEL,
   weightsText,
@@ -62,8 +64,19 @@ function Sparkline({ curve, initial, color }: { curve: [number, number][]; initi
   );
 }
 
-function PersonaCard({ p, rank, color, initial, selected, onSelect }: {
-  p: PersonaSummary; rank: number; color: string; initial: number; selected: boolean; onSelect: () => void;
+function RiskBadge({ p }: { p: PersonaSummary }) {
+  if (!p.risk) return null;
+  const r = p.risk;
+  const label = r.status === "paused" && r.pausedUntil !== null ? `пауза до ${fmtTime(r.pausedUntil)}` : RISK_STATUS_LABEL[r.status];
+  return (
+    <span className={`risk-badge risk-${r.status}`} title={`Риск на сделку ${fmtPct(r.riskFraction, 2).replace("+", "")}, просадка ${fmtPct(r.drawdownPct, 1)}`}>
+      {r.status === "normal" ? "●" : "▲"} {label} · риск {fmtPct(r.riskFraction, 2).replace("+", "")}
+    </span>
+  );
+}
+
+function PersonaCard({ p, rank, color, initial, selected, onSelect, names }: {
+  p: PersonaSummary; rank: number; color: string; initial: number; selected: boolean; onSelect: () => void; names: (id: string) => string;
 }) {
   const wr = winRate(p);
   const pnl = p.equity - initial;
@@ -90,6 +103,11 @@ function PersonaCard({ p, rank, color, initial, selected, onSelect }: {
             <div><dt>В плюс</dt><dd>{wr === null ? "—" : fmtPct(wr, 0).replace("+", "")}</dd></div>
             <div><dt>Открыто</dt><dd>{p.open.length}</dd></div>
           </>
+        ) : p.kind === "manager" ? (
+          <>
+            <div><dt>Деньги у</dt><dd>{p.allocations.length === 0 ? "$" : [...p.allocations].sort((a, b) => b.value - a.value).map((a) => names(a.personaId)).join(", ")}</dd></div>
+            <div><dt>Решений</dt><dd>{p.rebalances.length}</dd></div>
+          </>
         ) : (
           <>
             <div><dt>Держит</dt><dd>{p.holdings.length === 0 ? "$" : p.holdings.map((h) => coin(h.symbol)).join(", ")}</dd></div>
@@ -98,6 +116,7 @@ function PersonaCard({ p, rank, color, initial, selected, onSelect }: {
         )}
         <div><dt>Просадка</dt><dd>{fmtPct(p.maxDrawdownPct, 1)}</dd></div>
       </dl>
+      <RiskBadge p={p} />
       {p.kind === "signals" && p.closedTrades < MIN_TRADES_FOR_RANKING && (
         <span className="persona-note">Мало сделок для выводов ({p.closedTrades} из {MIN_TRADES_FOR_RANKING})</span>
       )}
@@ -105,7 +124,7 @@ function PersonaCard({ p, rank, color, initial, selected, onSelect }: {
   );
 }
 
-function feedText(e: FeedEvent): { title: string; detail: string; amount?: number } {
+function feedText(e: FeedEvent, p: PersonaSummary | undefined, names: (id: string) => string): { title: string; detail: string; amount?: number } {
   if (e.kind === "open") {
     return {
       title: `Вход ${DIRECTION_LABEL[e.direction]} ${coin(e.symbol)}`,
@@ -119,10 +138,17 @@ function feedText(e: FeedEvent): { title: string; detail: string; amount?: numbe
       amount: e.pnlUsd,
     };
   }
+  if (e.kind === "skip") {
+    return {
+      title: `Пропустил ${DIRECTION_LABEL[e.direction]} ${coin(e.symbol)}: ${SKIP_LABEL[e.reason]}`,
+      detail: `защита капитала · просадка ${fmtPct(e.drawdown, 1)}`,
+    };
+  }
+  if (p?.kind === "manager") return { title: `Распределил: ${weightsText(e.weights, names)}`, detail: e.note };
   return { title: `Перестановка: ${weightsText(e.weights)}`, detail: e.note };
 }
 
-function Feed({ feed, personas, colorVar }: { feed: FeedEvent[]; personas: PersonaSummary[]; colorVar: (id: string) => string }) {
+function Feed({ feed, personas, colorVar, names }: { feed: FeedEvent[]; personas: PersonaSummary[]; colorVar: (id: string) => string; names: (id: string) => string }) {
   const [filter, setFilter] = useState<FeedFilter>("all");
   const [limit, setLimit] = useState(FEED_PAGE);
   const byId = useMemo(() => new Map(personas.map((p) => [p.id, p])), [personas]);
@@ -144,7 +170,7 @@ function Feed({ feed, personas, colorVar }: { feed: FeedEvent[]; personas: Perso
         <ol className="feed-list">
           {items.slice(0, limit).map((e, i) => {
             const p = byId.get(e.personaId);
-            const t = feedText(e);
+            const t = feedText(e, p, names);
             return (
               <li key={`${e.personaId}-${e.kind}-${e.t}-${i}`} className="feed-item">
                 <span className="feed-emoji" style={{ borderColor: `var(${colorVar(e.personaId)})` }} aria-hidden="true">{p?.emoji}</span>
@@ -194,12 +220,34 @@ function TradeRow({ t, open }: { t: PersonaTrade; open: boolean }) {
       )}
       <td className={tone(t.pnlUsd)}>{usd(t.pnlUsd, true)}</td>
       <td className={tone(t.r)}>{t.r === null ? "—" : `${t.r > 0 ? "+" : ""}${fmtNum(t.r, 2)}R`}</td>
+      <td title={t.notes.join("; ") || undefined}>{fmtPct(t.riskFraction, 2).replace("+", "")}{t.notes.length > 0 ? " ▲" : ""}</td>
       <td>{t.mode === "live" ? "" : t.mode === "replay" ? "реплей" : "с опозданием"}</td>
     </tr>
   );
 }
 
-function PersonaDetail({ p, snapshot }: { p: PersonaSummary; snapshot: PersonasSnapshot }) {
+function RiskPanel({ p }: { p: PersonaSummary }) {
+  const r = p.risk;
+  if (!r) return null;
+  return (
+    <>
+      <h3>Защита капитала</h3>
+      <dl className="kv">
+        <dt>Режим</dt><dd><RiskBadge p={p} /></dd>
+        <dt>Просадка от максимума</dt><dd>{fmtPct(r.drawdownPct, 1)}</dd>
+        <dt>Риск на следующую сделку</dt><dd>{fmtPct(r.riskFraction, 2).replace("+", "")}</dd>
+        <dt>За последние 24 часа</dt><dd className={tone(r.dayPnlPct)}>{fmtPct(r.dayPnlPct, 2)}</dd>
+        <dt>На охлаждении</dt><dd>{r.cooling.length === 0 ? "нет" : r.cooling.join(", ")}</dd>
+        <dt>Пропущено сигналов ради защиты</dt><dd>{r.skipped}</dd>
+      </dl>
+    </>
+  );
+}
+
+const HISTORY_PAGE = 20;
+
+function PersonaDetail({ p, snapshot, names }: { p: PersonaSummary; snapshot: PersonasSnapshot; names: (id: string) => string }) {
+  const [historyLimit, setHistoryLimit] = useState(HISTORY_PAGE);
   return (
     <section className="panel detail" aria-labelledby="detail-title">
       <h2 id="detail-title"><span aria-hidden="true">{p.emoji}</span> {p.name}</h2>
@@ -213,11 +261,12 @@ function PersonaDetail({ p, snapshot }: { p: PersonaSummary; snapshot: PersonasS
 
       {p.kind === "signals" ? (
         <>
+          <RiskPanel p={p} />
           <h3>Открытые позиции · {p.open.length}</h3>
           {p.open.length === 0 ? <p className="hint">Нет — ждёт сигнала.</p> : (
             <div className="table-wrap">
               <table>
-                <thead><tr><th>Монета</th><th>Сторона</th><th>Вход, МСК</th><th>Цена входа</th><th>Стоп</th><th>Цель</th><th>Истекает</th><th>Сейчас</th><th>R</th><th /></tr></thead>
+                <thead><tr><th>Монета</th><th>Сторона</th><th>Вход, МСК</th><th>Цена входа</th><th>Стоп</th><th>Цель</th><th>Истекает</th><th>Сейчас</th><th>R</th><th>Риск</th><th /></tr></thead>
                 <tbody>{p.open.map((t) => <TradeRow key={`${t.symbol}-${t.decidedAt}`} t={t} open />)}</tbody>
               </table>
             </div>
@@ -226,11 +275,42 @@ function PersonaDetail({ p, snapshot }: { p: PersonaSummary; snapshot: PersonasS
           {p.history.length === 0 ? <p className="hint">Пока нет.</p> : (
             <div className="table-wrap">
               <table>
-                <thead><tr><th>Монета</th><th>Сторона</th><th>Вход, МСК</th><th>Цена входа</th><th>Выход, МСК</th><th>Как</th><th>Результат</th><th>R</th><th /></tr></thead>
-                <tbody>{p.history.map((t) => <TradeRow key={`${t.symbol}-${t.decidedAt}`} t={t} open={false} />)}</tbody>
+                <thead><tr><th>Монета</th><th>Сторона</th><th>Вход, МСК</th><th>Цена входа</th><th>Выход, МСК</th><th>Как</th><th>Результат</th><th>R</th><th>Риск</th><th /></tr></thead>
+                <tbody>{p.history.slice(0, historyLimit).map((t) => <TradeRow key={`${t.symbol}-${t.decidedAt}`} t={t} open={false} />)}</tbody>
               </table>
             </div>
           )}
+          {p.history.length > historyLimit && (
+            <button type="button" className="more" onClick={() => setHistoryLimit(historyLimit + HISTORY_PAGE)}>
+              Показать ещё (последние {p.history.length} из {p.closedTrades})
+            </button>
+          )}
+        </>
+      ) : p.kind === "manager" ? (
+        <>
+          <h3>У кого деньги</h3>
+          <div className="table-wrap">
+            <table>
+              <thead><tr><th>Персонаж</th><th>Сумма</th><th>Доля</th></tr></thead>
+              <tbody>
+                {[...p.allocations].sort((a, b) => b.value - a.value).map((a) => (
+                  <tr key={a.personaId}><td>{names(a.personaId)}</td><td>{usd(a.value)}</td><td>{fmtPct(a.value / p.equity, 0).replace("+", "")}</td></tr>
+                ))}
+                <tr><td>$</td><td>{usd(p.cash)}</td><td>{fmtPct((p.cash ?? 0) / p.equity, 0).replace("+", "")}</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <h3>Решения</h3>
+          <div className="table-wrap">
+            <table>
+              <thead><tr><th>Когда, МСК</th><th>Распределил</th><th>Издержки</th><th>Почему</th><th /></tr></thead>
+              <tbody>
+                {p.rebalances.map((r) => (
+                  <tr key={r.at}><td>{fmtTime(r.at)}</td><td className="wrap">{weightsText(r.weights, names)}</td><td>{usd(r.costUsd)}</td><td className="wrap">{r.note}</td><td>{r.mode === "live" ? "" : r.mode === "replay" ? "реплей" : "с опозданием"}</td></tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </>
       ) : (
         <>
@@ -294,6 +374,7 @@ export function Traders() {
   const colorVar = useCallback((id: string) => colorVarFor(ids, id), [ids]);
   const ranked = useMemo(() => (snapshot ? rankPersonas(snapshot.personas) : []), [snapshot]);
   const visible = useMemo(() => new Set(ids.filter((id) => !hidden.has(id))), [ids, hidden]);
+  const names = useCallback((id: string) => snapshot?.personas.find((p) => p.id === id)?.name ?? id, [snapshot]);
 
   if (load.state === "loading") return <p className="hint">Загружаю состояние трейдеров…</p>;
   if (load.state === "error") return <p className="error">{load.message}</p>;
@@ -318,7 +399,7 @@ export function Traders() {
         {ranked.map((p, i) => (
           <PersonaCard
             key={p.id} p={p} rank={i + 1} color={colorVar(p.id)} initial={s.initialEquity}
-            selected={active?.id === p.id} onSelect={() => setSelected(p.id)}
+            selected={active?.id === p.id} onSelect={() => setSelected(p.id)} names={names}
           />
         ))}
       </section>
@@ -341,8 +422,8 @@ export function Traders() {
       </section>
 
       <div className="columns">
-        {active && <PersonaDetail p={active} snapshot={s} />}
-        <Feed feed={s.feed} personas={s.personas} colorVar={colorVar} />
+        {active && <PersonaDetail key={active.id} p={active} snapshot={s} names={names} />}
+        <Feed feed={s.feed} personas={s.personas} colorVar={colorVar} names={names} />
       </div>
     </div>
   );
