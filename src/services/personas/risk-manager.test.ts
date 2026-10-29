@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { curveAt, managerCurve, managerWeights, type ManagerRebalance } from "./manager-trader";
 import { decideRisk, riskState, RISK_RULES, type ClosedTrade } from "./risk-manager";
-import { INITIAL_EQUITY, PERSONA_START, type ManagerPersonaDef } from "./roster";
+import { INITIAL_EQUITY, type ManagerPersonaDef } from "./roster";
 
+/** Старт счетов в тестах. */
+const START = Date.UTC(2026, 9, 1);
 const H = 3_600_000;
 const D = 24 * H;
-const T = PERSONA_START + 30 * D;
+const T = START + 30 * D;
 
 const trade = (exitTime: number, pnlUsd: number, extra: Partial<ClosedTrade> = {}): ClosedTrade => ({
   symbol: "BTC/USDT", direction: "long", exitTime, pnlUsd, r: pnlUsd / 100, ...extra,
@@ -65,7 +67,7 @@ describe("manager", () => {
     lookbackDays: 28, maxWeight: 0.4, timeframe: "1d", symbols: [],
   };
   const linear = (from: number, to: number): [number, number][] =>
-    Array.from({ length: 31 }, (_, k) => [PERSONA_START + k * D, from + ((to - from) * k) / 30]);
+    Array.from({ length: 31 }, (_, k) => [START + k * D, from + ((to - from) * k) / 30]);
   const curves = new Map([
     ["a", linear(10_000, 12_000)],
     ["b", linear(10_000, 10_500)],
@@ -74,24 +76,24 @@ describe("manager", () => {
   const names = new Map([["a", "A"], ["b", "B"], ["c", "C"]]);
 
   it("splits equally at the start and then favours recent winners, capped at 40%", () => {
-    expect(managerWeights(manager, curves, PERSONA_START, names).weights).toEqual({ a: 1 / 3, b: 1 / 3, c: 1 / 3 });
-    const w = managerWeights(manager, curves, PERSONA_START + 30 * D, names);
+    expect(managerWeights(manager, curves, START, names, START).weights).toEqual({ a: 1 / 3, b: 1 / 3, c: 1 / 3 });
+    const w = managerWeights(manager, curves, START + 30 * D, names, START);
     expect(Object.keys(w.weights).sort()).toEqual(["a", "b"]);
     expect(w.weights.a).toBe(0.4);
     // Окно 28 дней: со 2-го по 30-й день.
-    const from = PERSONA_START + 2 * D;
-    const ret = (id: string) => curveAt(curves.get(id)!, PERSONA_START + 30 * D) / curveAt(curves.get(id)!, from) - 1;
+    const from = START + 2 * D;
+    const ret = (id: string) => curveAt(curves.get(id)!, START + 30 * D) / curveAt(curves.get(id)!, from) - 1;
     expect(w.weights.b).toBeCloseTo(ret("b") / (ret("a") + ret("b")), 12);
     expect(w.note).toContain("A +");
   });
 
   it("follows the allocated personas' equity and pays costs on reallocation", () => {
-    const log: ManagerRebalance[] = [{ at: PERSONA_START, weights: { a: 0.5, c: 0.5 }, scores: {}, note: "", recordedAt: 0, codeCommit: null, mode: "replay" }];
-    const grid = [PERSONA_START, PERSONA_START + 30 * D];
+    const log: ManagerRebalance[] = [{ at: START, weights: { a: 0.5, c: 0.5 }, scores: {}, note: "", recordedAt: 0, codeCommit: null, mode: "replay" }];
+    const grid = [START, START + 30 * D];
     const m = managerCurve(log, curves, grid);
     const afterCost = INITIAL_EQUITY - m.costs[0]!;
     expect(m.costs[0]).toBeCloseTo(INITIAL_EQUITY * 0.0012, 9);
     expect(m.curve[1]![1]).toBeCloseTo((afterCost / 2) * 1.2 + (afterCost / 2) * 0.9, 6);
-    expect(curveAt(curves.get("a")!, PERSONA_START - 1)).toBe(INITIAL_EQUITY);
+    expect(curveAt(curves.get("a")!, START - 1)).toBe(INITIAL_EQUITY);
   });
 });

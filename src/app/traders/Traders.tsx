@@ -1,10 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { DISPLAY_TIME_ZONE } from "@/core/time";
 import { DataBranchReader } from "@/services/data-branch";
 import { PERSONAS_STATE_PATH, type FeedEvent, type PersonaSummary, type PersonasSnapshot, type PersonaTrade, type TradeMode } from "@/services/personas/types";
 import { fmtNum, fmtPct, fmtPrice, fmtTime } from "../terminal/format";
+import { closedTrades } from "@/services/personas/journal-view";
+import type { PersonaEntry, PersonaExit } from "@/services/personas/signal-trader";
 import { EquityChart } from "./EquityChart";
+import { applyLive, fetchLivePrices, liveView, type LivePrices } from "./live";
 import {
   baselineY,
   coin,
@@ -23,6 +27,7 @@ import {
 } from "./model";
 
 const REFRESH_MS = 60_000;
+const LIVE_PRICES_MS = 30_000;
 const FEED_PAGE = 40;
 
 type Load = { state: "loading" } | { state: "error"; message: string } | { state: "ready"; data: PersonasSnapshot };
@@ -248,6 +253,21 @@ const HISTORY_PAGE = 20;
 
 function PersonaDetail({ p, snapshot, names }: { p: PersonaSummary; snapshot: PersonasSnapshot; names: (id: string) => string }) {
   const [historyLimit, setHistoryLimit] = useState(HISTORY_PAGE);
+  const [full, setFull] = useState<{ state: "idle" | "loading" | "error"; trades: PersonaTrade[] | null; message?: string }>({ state: "idle", trades: null });
+  const history = full.trades ?? p.history;
+  const loadFull = async () => {
+    setFull({ state: "loading", trades: null });
+    try {
+      const reader = new DataBranchReader(process.env.NEXT_PUBLIC_DATA_BRANCH_URL || undefined);
+      const [entries, exits] = await Promise.all([
+        reader.readJsonl<PersonaEntry>(`personas/${p.id}/entries.jsonl`),
+        reader.readJsonl<PersonaExit>(`personas/${p.id}/exits.jsonl`),
+      ]);
+      setFull({ state: "idle", trades: closedTrades(entries, exits) });
+    } catch (e) {
+      setFull({ state: "error", trades: null, message: e instanceof Error ? e.message : String(e) });
+    }
+  };
   return (
     <section className="panel detail" aria-labelledby="detail-title">
       <h2 id="detail-title"><span aria-hidden="true">{p.emoji}</span> {p.name}</h2>
@@ -255,8 +275,7 @@ function PersonaDetail({ p, snapshot, names }: { p: PersonaSummary; snapshot: Pe
       <h3>Правила</h3>
       <ul className="rules">{p.rules.map((r) => <li key={r}>{r}</li>)}</ul>
       <p className="hint">
-        Счёт открыт {fmtTime(snapshot.startedAt)} МСК с {usd(snapshot.initialEquity)}.
-        {p.launchedAt !== null && ` Запущен ${fmtTime(p.launchedAt)} МСК — более ранние действия проиграны по тем же правилам (реплей).`}
+        Торгует с {fmtTime(snapshot.startedAt)} МСК, стартовый капитал {usd(snapshot.initialEquity)}. Все решения — в реальном времени.
       </p>
 
       {p.kind === "signals" ? (
@@ -272,19 +291,24 @@ function PersonaDetail({ p, snapshot, names }: { p: PersonaSummary; snapshot: Pe
             </div>
           )}
           <h3>Закрытые сделки · {p.closedTrades}</h3>
-          {p.history.length === 0 ? <p className="hint">Пока нет.</p> : (
+          {history.length === 0 ? <p className="hint">Пока нет.</p> : (
             <div className="table-wrap">
               <table>
                 <thead><tr><th>Монета</th><th>Сторона</th><th>Вход, МСК</th><th>Цена входа</th><th>Выход, МСК</th><th>Как</th><th>Результат</th><th>R</th><th>Риск</th><th /></tr></thead>
-                <tbody>{p.history.slice(0, historyLimit).map((t) => <TradeRow key={`${t.symbol}-${t.decidedAt}`} t={t} open={false} />)}</tbody>
+                <tbody>{history.slice(0, historyLimit).map((t) => <TradeRow key={`${t.symbol}-${t.decidedAt}`} t={t} open={false} />)}</tbody>
               </table>
             </div>
           )}
-          {p.history.length > historyLimit && (
+          {history.length > historyLimit ? (
             <button type="button" className="more" onClick={() => setHistoryLimit(historyLimit + HISTORY_PAGE)}>
-              Показать ещё (последние {p.history.length} из {p.closedTrades})
+              Показать ещё ({historyLimit} из {history.length})
             </button>
-          )}
+          ) : full.trades === null && p.closedTrades > p.history.length ? (
+            <button type="button" className="more" onClick={() => void loadFull()} disabled={full.state === "loading"}>
+              {full.state === "loading" ? "Загружаю…" : `Загрузить всю историю с начала (${p.closedTrades})`}
+            </button>
+          ) : null}
+          {full.state === "error" && <p className="error">{full.message}</p>}
         </>
       ) : p.kind === "manager" ? (
         <>
@@ -370,15 +394,40 @@ export function Traders() {
   }, []);
 
   const snapshot = load.state === "ready" ? load.data : null;
+  const [live, setLive] = useState<{ prices: LivePrices; at: number } | { error: string } | null>(null);
+  const symbolsKey = snapshot ? Object.keys(snapshot.prices).sort().join(",") : "";
+  useEffect(() => {
+    if (!symbolsKey) return;
+    const controller = new AbortController();
+    const tick = async () => {
+      try {
+        const prices = await fetchLivePrices(symbolsKey.split(","), controller.signal);
+        setLive({ prices, at: Date.now() });
+      } catch (e) {
+        if (!controller.signal.aborted) setLive({ error: e instanceof Error ? e.message : String(e) });
+      }
+    };
+    void tick();
+    const timer = setInterval(() => void tick(), LIVE_PRICES_MS);
+    return () => {
+      controller.abort();
+      clearInterval(timer);
+    };
+  }, [symbolsKey]);
+  const shown = useMemo(
+    () => (snapshot && live && "prices" in live ? applyLive(snapshot, liveView(snapshot, live.prices), live.at) : snapshot),
+    [snapshot, live],
+  );
   const ids = useMemo(() => snapshot?.personas.map((p) => p.id) ?? [], [snapshot]);
   const colorVar = useCallback((id: string) => colorVarFor(ids, id), [ids]);
-  const ranked = useMemo(() => (snapshot ? rankPersonas(snapshot.personas) : []), [snapshot]);
+  const ranked = useMemo(() => (shown ? rankPersonas(shown.personas) : []), [shown]);
   const visible = useMemo(() => new Set(ids.filter((id) => !hidden.has(id))), [ids, hidden]);
   const names = useCallback((id: string) => snapshot?.personas.find((p) => p.id === id)?.name ?? id, [snapshot]);
+  const formatClockSeconds = (t: number) => new Intl.DateTimeFormat("ru-RU", { timeZone: DISPLAY_TIME_ZONE, hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(t);
 
   if (load.state === "loading") return <p className="hint">Загружаю состояние трейдеров…</p>;
-  if (load.state === "error") return <p className="error">{load.message}</p>;
-  const s = load.data;
+  if (load.state === "error" || !shown) return <p className="error">{load.state === "error" ? load.message : ""}</p>;
+  const s = shown;
   const active = s.personas.find((p) => p.id === (selected ?? ranked[0]?.id)) ?? null;
   const lastPrice = Math.max(...Object.values(s.prices).map((p) => p.time));
   const toggle = (id: string) => {
@@ -391,8 +440,14 @@ export function Traders() {
   return (
     <div className="traders">
       <p className="hint">
-        У каждого {usd(s.initialEquity)} виртуальных денег с {fmtTime(s.startedAt)} МСК. Цены — последняя закрытая часовая свеча ({fmtTime(lastPrice)} МСК),
-        сводка обновлена {fmtTime(s.generatedAt)} МСК. Комиссия {fmtPct(s.costs.feeRate, 1).replace("+", "")} и проскальзывание {fmtPct(s.costs.slippage, 2).replace("+", "")} на сторону учтены.
+        Старт {fmtTime(s.startedAt)} МСК, у каждого было {usd(s.initialEquity)} виртуальных денег. Решения принимаются каждые 15 минут
+        (последний цикл {fmtTime(s.generatedAt)} МСК, закрытые свечи до {fmtTime(lastPrice)} МСК).{" "}
+        {live && "prices" in live
+          ? <span className="live-dot">Открытые позиции оценены по ценам Binance на {formatClockSeconds(live.at)} МСК, обновление каждые 30 с.</span>
+          : live && "error" in live
+            ? <span className="warn">Живые цены недоступны ({live.error}) — показана оценка последнего цикла.</span>
+            : null}{" "}
+        Комиссия {fmtPct(s.costs.feeRate, 1).replace("+", "")} и проскальзывание {fmtPct(s.costs.slippage, 2).replace("+", "")} на сторону учтены.
       </p>
 
       <section aria-label="Рейтинг" className="leaderboard">
@@ -418,7 +473,7 @@ export function Traders() {
           </div>
         </div>
         <EquityChart personas={s.personas} colorVar={colorVar} visible={visible} selected={active?.id ?? null} initialEquity={s.initialEquity} theme={theme} />
-        <p className="replay-note hint">Пунктир — стартовые {usd(s.initialEquity)}. Точки каждые 4 часа; открытые позиции оценены по текущей цене.</p>
+        <p className="replay-note hint">Пунктир — стартовые {usd(s.initialEquity)}. Точки каждые 4 часа, последняя — сейчас; открытые позиции оценены по текущей цене.</p>
       </section>
 
       <div className="columns">

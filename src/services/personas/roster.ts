@@ -6,8 +6,16 @@ import type { MarketSymbol } from "@/modules/market-data";
  * публичных данных Binance Spot. Реальных ордеров и ключей нет.
  */
 
-/** Общий старт всех счетов. После конца разбиения research/validation/holdout (2026-10-01). */
-export const PERSONA_START: UnixMs = Date.UTC(2026, 9, 1);
+/**
+ * Момент старта всех счетов записывается первым циклом в этот файл ветки `data`:
+ * персонажи торгуют только вперёд от запуска, без проигрывания истории.
+ */
+export const PERSONAS_START_PATH = "personas/start.json";
+
+export interface PersonasStart {
+  startedAt: UnixMs;
+  codeCommit: string | null;
+}
 export const INITIAL_EQUITY = 10_000;
 /** Риск на сделку от текущего капитала. */
 export const RISK_PER_TRADE = 0.01;
@@ -166,7 +174,7 @@ export const PERSONAS: PersonaDef[] = [
     timeframe: "1d",
     symbols: ["BTC/USDT"],
     rules: [
-      "1 октября 2026 купил BTC на весь капитал и держит.",
+      "В момент запуска купил BTC на весь капитал и держит.",
       "Эталон «ничего не делать»: активный стиль имеет смысл, только если обгоняет его.",
     ],
   },

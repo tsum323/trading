@@ -5,7 +5,7 @@ import { lossPerUnit } from "@/modules/risk";
 import type { FileArchive } from "@/modules/storage";
 import type { Strategy, TradingSignal } from "@/modules/strategies";
 import { decideRisk, type ClosedTrade, type SkipReason } from "./risk-manager";
-import { MAX_POSITION_SHARE, PERSONA_START, type SignalPersonaDef } from "./roster";
+import { MAX_POSITION_SHARE, type SignalPersonaDef } from "./roster";
 import type { TradeMode } from "./types";
 
 /** Сделка персонажа: сигнал и размер позиции, записанные в момент `recordedAt`. */
@@ -83,7 +83,7 @@ function freeFrom(signal: TradingSignal, e: Evaluation): UnixMs {
 
 /**
  * Один цикл персонажа на сигналах стратегии:
- * 1. новые решения после прошлого цикла (при первом запуске — с PERSONA_START, это реплей);
+ * 1. новые решения после прошлого цикла (при первом запуске — после старта счетов `start`);
  * 2. по символу не больше одной позиции;
  * 3. размер — по правилам защиты капитала (risk-manager): риск по просадке, дневной стоп, пауза,
  *    лимит открытого риска и (для адаптивных) охлаждение; номинал не больше MAX_POSITION_SHARE;
@@ -95,10 +95,12 @@ export function runSignalTrader(opts: {
   sourceId: MarketDataSourceId;
   persona: SignalPersonaDef;
   strategy: Strategy;
+  /** Старт счетов: решения раньше него не принимаются. */
+  start: UnixMs;
   now: UnixMs;
   codeCommit: string | null;
 }): SignalTraderReport {
-  const { archive, sourceId, persona, strategy, now } = opts;
+  const { archive, sourceId, persona, strategy, start, now } = opts;
   const tf = strategy.timeframe;
   const size = TIMEFRAME_MS[tf];
   const cursorPath = personaPath(persona.id, "cursor.json");
@@ -108,7 +110,7 @@ export function runSignalTrader(opts: {
 
   const candles = new Map<MarketSymbol, Candle[]>();
   for (const symbol of persona.symbols) {
-    candles.set(symbol, archive.getCandles(sourceId, { symbol, timeframe: tf, from: PERSONA_START - (strategy.lookback + 1) * size }));
+    candles.set(symbol, archive.getCandles(sourceId, { symbol, timeframe: tf, from: start - (strategy.lookback + 1) * size }));
   }
   const asOf = (symbol: MarketSymbol) => candles.get(symbol)!.at(-1)?.closeTime ?? 0;
   const evaluate = (s: TradingSignal): Evaluation => {
@@ -124,7 +126,7 @@ export function runSignalTrader(opts: {
   const fresh: TradingSignal[] = [];
   for (const symbol of persona.symbols) {
     const series = candles.get(symbol)!;
-    const after = cursor.processed[symbol] ?? PERSONA_START;
+    const after = Math.max(cursor.processed[symbol] ?? start, start);
     const window = series.slice(Math.max(0, lowerBound(series, after) - strategy.lookback));
     fresh.push(...replaySignals(strategy, window).filter((s) => s.createdAt > after));
   }

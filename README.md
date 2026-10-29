@@ -165,17 +165,39 @@ personas/<id>/cursor.json       до какой свечи обработаны 
 personas/state.json             сводка для сайта
 ```
 
-- Счета стартуют 2026-10-01 00:00 UTC; первый запуск проигрывает решения с этой
-  даты по тем же правилам (помечены «реплей»), дальше — в реальном времени.
+- Счета стартуют в момент первого запуска (`personas/start.json`) и дальше торгуют
+  только в реальном времени; сайт показывает всё с момента старта. Между циклами
+  сайт раз в 30 с переоценивает открытые позиции по текущим ценам Binance.
 - Запустить вручную: Actions → Live forward test → Run workflow.
 - Расписание GitHub срабатывает ненадёжно (запуски пропускаются или опаздывают);
-  опоздавшие решения помечаются «с опозданием». Для регулярных запусков можно
-  вызывать workflow внешним планировщиком через API `workflow_dispatch`.
+  опоздавшие решения помечаются «с опозданием». Для регулярных запусков — внешний
+  планировщик (ниже).
 - GitHub отключает запланированные workflow в публичном репозитории после
   60 дней без активности в нём — тогда их включают снова на вкладке Actions.
 - Локально тот же цикл: `npm run personas -- --archive <каталог>`.
 - Прежний перспективный тест одной стратегии (`npm run live`) остаётся как CLI;
   его журналы `signals/`, `outcomes/` в ветке `data` больше не обновляются.
+
+### Надёжный запуск каждые 15 минут (cron-job.org)
+
+Внешний планировщик просит GitHub запустить workflow; GitHub выполняет его как
+обычно. Токен хранится только у вас и у планировщика.
+
+1. GitHub → Settings → Developer settings → Personal access tokens →
+   **Fine-grained tokens** → Generate new token. Repository access: **Only select
+   repositories** → `trading`. Permissions → Repository → **Actions: Read and
+   write** (остальное не трогать). Срок действия — по желанию; скопировать токен.
+2. https://cron-job.org → создать задачу:
+   - URL: `https://api.github.com/repos/tsum323/trading/actions/workflows/live.yml/dispatches`
+   - расписание: каждые 15 минут, минуты `2,17,32,47`;
+   - Advanced → Request method **POST**, заголовки
+     `Authorization: Bearer <токен>`, `Accept: application/vnd.github+json`,
+     `X-GitHub-Api-Version: 2022-11-28`; тело запроса `{"ref":"main"}`.
+3. Проверка: Actions → Live forward test — появляются запуски с событием
+   `workflow_dispatch`. Ответ GitHub на запрос — `204`.
+
+Одновременные запуски не пересекаются (`concurrency` в workflow): если сработают
+и планировщик, и расписание GitHub, второй подождёт первого.
 
 ## Структура
 

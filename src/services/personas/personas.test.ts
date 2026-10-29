@@ -10,9 +10,11 @@ import { FileArchive } from "@/modules/storage";
 import type { Strategy } from "@/modules/strategies";
 import { FIXTURE_SOURCE } from "@/test/fixtures";
 import { rebalanceTimes, runPortfolioTrader, targetWeights, type Rebalance } from "./portfolio-trader";
-import { INITIAL_EQUITY, MAX_POSITION_SHARE, PERSONA_START, RISK_PER_TRADE, type PortfolioPersonaDef, type SignalPersonaDef } from "./roster";
+import { INITIAL_EQUITY, MAX_POSITION_SHARE, RISK_PER_TRADE, type PortfolioPersonaDef, type SignalPersonaDef } from "./roster";
 import { personaPath, runSignalTrader, type PersonaEntry, type PersonaExit } from "./signal-trader";
 
+/** Старт счетов в тестах. */
+const START = Date.UTC(2026, 9, 1);
 const H = TIMEFRAME_MS["1h"];
 const D = TIMEFRAME_MS["1d"];
 
@@ -59,12 +61,12 @@ describe("personas", () => {
     const up = (i: number) => 100 * 1.003 ** i;
 
     it("replays from the start, keeps one position per symbol and sizes by 1% risk", () => {
-      archive.upsertCandles(candles("A/USDT", "1h", PERSONA_START - 5 * H, 30, up));
-      const now = PERSONA_START + 25 * H + 1;
-      const r = runSignalTrader({ archive, sourceId: FIXTURE_SOURCE, persona: signalPersona, strategy: everyBar, now, codeCommit: "abc" });
+      archive.upsertCandles(candles("A/USDT", "1h", START - 5 * H, 30, up));
+      const now = START + 25 * H + 1;
+      const r = runSignalTrader({ archive, sourceId: FIXTURE_SOURCE, persona: signalPersona, strategy: everyBar, start: START, now, codeCommit: "abc" });
       expect(r.newEntries.length).toBeGreaterThan(2);
       expect(r.skippedBusy).toBeGreaterThan(0);
-      expect(r.newEntries.every((e) => e.signal.createdAt > PERSONA_START)).toBe(true);
+      expect(r.newEntries.every((e) => e.signal.createdAt > START)).toBe(true);
       // До запуска (минус одна свеча) — реплей; последняя свеча перед запуском уже «вовремя».
       expect(r.newEntries.every((e) => e.mode === (e.signal.createdAt + H < now ? "replay" : "live"))).toBe(true);
 
@@ -90,24 +92,24 @@ describe("personas", () => {
     });
 
     it("only appends: a repeated cycle without new candles records nothing", () => {
-      archive.upsertCandles(candles("A/USDT", "1h", PERSONA_START - 5 * H, 30, up));
-      const now = PERSONA_START + 25 * H + 1;
-      runSignalTrader({ archive, sourceId: FIXTURE_SOURCE, persona: signalPersona, strategy: everyBar, now, codeCommit: null });
+      archive.upsertCandles(candles("A/USDT", "1h", START - 5 * H, 30, up));
+      const now = START + 25 * H + 1;
+      runSignalTrader({ archive, sourceId: FIXTURE_SOURCE, persona: signalPersona, strategy: everyBar, start: START, now, codeCommit: null });
       const before = archive.readJsonl<PersonaEntry>(personaPath("t", "entries")).length;
-      const again = runSignalTrader({ archive, sourceId: FIXTURE_SOURCE, persona: signalPersona, strategy: everyBar, now: now + 60_000, codeCommit: null });
+      const again = runSignalTrader({ archive, sourceId: FIXTURE_SOURCE, persona: signalPersona, strategy: everyBar, start: START, now: now + 60_000, codeCommit: null });
       expect(again.newEntries).toEqual([]);
       expect(again.newExits).toEqual([]);
       expect(archive.readJsonl<PersonaEntry>(personaPath("t", "entries")).length).toBe(before);
     });
 
     it("marks decisions after launch as live, and exits are recorded once", () => {
-      const all = candles("A/USDT", "1h", PERSONA_START - 5 * H, 40, up);
+      const all = candles("A/USDT", "1h", START - 5 * H, 40, up);
       archive.upsertCandles(all.slice(0, 20));
       const launch = all[19]!.closeTime + 1;
-      runSignalTrader({ archive, sourceId: FIXTURE_SOURCE, persona: signalPersona, strategy: everyBar, now: launch, codeCommit: null });
+      runSignalTrader({ archive, sourceId: FIXTURE_SOURCE, persona: signalPersona, strategy: everyBar, start: START, now: launch, codeCommit: null });
       archive.upsertCandles(all.slice(20, 30));
       const later = all[29]!.closeTime + 1;
-      const r = runSignalTrader({ archive, sourceId: FIXTURE_SOURCE, persona: signalPersona, strategy: everyBar, now: later, codeCommit: null });
+      const r = runSignalTrader({ archive, sourceId: FIXTURE_SOURCE, persona: signalPersona, strategy: everyBar, start: START, now: later, codeCommit: null });
       expect(r.newEntries.length).toBeGreaterThan(0);
       // Каждое из этих решений записано позже чем через час — late, но не replay.
       expect(r.newEntries.every((e) => e.mode !== "replay")).toBe(true);
@@ -119,11 +121,11 @@ describe("personas", () => {
 
   describe("portfolio trader", () => {
     it("schedules the start and every Monday 00:00 UTC", () => {
-      expect(rebalanceTimes("once", null, PERSONA_START + 30 * D)).toEqual([PERSONA_START]);
-      expect(rebalanceTimes("once", PERSONA_START, PERSONA_START + 30 * D)).toEqual([]);
+      expect(rebalanceTimes("once", null, START + 30 * D, START)).toEqual([START]);
+      expect(rebalanceTimes("once", START, START + 30 * D, START)).toEqual([]);
       // 2026-10-01 — четверг; понедельники — 5 и 12 октября.
-      expect(rebalanceTimes("weekly", null, Date.UTC(2026, 9, 12))).toEqual([PERSONA_START, Date.UTC(2026, 9, 5), Date.UTC(2026, 9, 12)]);
-      expect(rebalanceTimes("weekly", Date.UTC(2026, 9, 5), Date.UTC(2026, 9, 18))).toEqual([Date.UTC(2026, 9, 12)]);
+      expect(rebalanceTimes("weekly", null, Date.UTC(2026, 9, 12), START)).toEqual([START, Date.UTC(2026, 9, 5), Date.UTC(2026, 9, 12)]);
+      expect(rebalanceTimes("weekly", Date.UTC(2026, 9, 5), Date.UTC(2026, 9, 18), START)).toEqual([Date.UTC(2026, 9, 12)]);
     });
 
     const rotator: PortfolioPersonaDef = {
@@ -133,13 +135,27 @@ describe("personas", () => {
 
     it("picks the strongest coins with positive momentum", () => {
       const daily = new Map([
-        ["A/USDT", candles("A/USDT", "1d", PERSONA_START - 10 * D, 10, (i) => 100 + i)],
-        ["B/USDT", candles("B/USDT", "1d", PERSONA_START - 10 * D, 10, (i) => 100 + 3 * i)],
-        ["C/USDT", candles("C/USDT", "1d", PERSONA_START - 10 * D, 10, (i) => 100 - i)],
+        ["A/USDT", candles("A/USDT", "1d", START - 10 * D, 10, (i) => 100 + i)],
+        ["B/USDT", candles("B/USDT", "1d", START - 10 * D, 10, (i) => 100 + 3 * i)],
+        ["C/USDT", candles("C/USDT", "1d", START - 10 * D, 10, (i) => 100 - i)],
       ]);
-      expect(targetWeights(rotator, daily, PERSONA_START).weights).toEqual({ "B/USDT": 0.5, "A/USDT": 0.5 });
+      expect(targetWeights(rotator, daily, START).weights).toEqual({ "B/USDT": 0.5, "A/USDT": 0.5 });
       // Свечи, закрытые после момента решения, не учитываются: за 8 дней до старта истории ещё мало.
-      expect(targetWeights(rotator, daily, PERSONA_START - 8 * D).weights).toEqual({});
+      expect(targetWeights(rotator, daily, START - 8 * D).weights).toEqual({});
+    });
+
+    it("waits for the execution candle when the start is not on an hour boundary", () => {
+      const holder: PortfolioPersonaDef = {
+        id: "hold2", name: "H", emoji: "💎", tagline: "", rules: [], kind: "portfolio", schedule: "once",
+        allocation: { type: "fixed", weights: { "A/USDT": 1 } }, timeframe: "1d", symbols: ["A/USDT"],
+      };
+      const start = START + 15 * 60_000;
+      archive.upsertCandles(candles("A/USDT", "1h", START, 1, () => 200));
+      expect(runPortfolioTrader({ archive, sourceId: FIXTURE_SOURCE, persona: holder, start, now: start + 30 * 60_000, codeCommit: null })).toEqual([]);
+      archive.upsertCandles(candles("A/USDT", "1h", START + H, 1, () => 210));
+      const [r] = runPortfolioTrader({ archive, sourceId: FIXTURE_SOURCE, persona: holder, start, now: START + 2 * H, codeCommit: null }) as [Rebalance];
+      expect(r.at).toBe(start);
+      expect(r.prices["A/USDT"]).toBe(210);
     });
 
     it("buys at the next hourly open and pays fees and slippage", () => {
@@ -147,14 +163,14 @@ describe("personas", () => {
         id: "hold", name: "H", emoji: "💎", tagline: "", rules: [], kind: "portfolio", schedule: "once",
         allocation: { type: "fixed", weights: { "A/USDT": 1 } }, timeframe: "1d", symbols: ["A/USDT"],
       };
-      archive.upsertCandles(candles("A/USDT", "1h", PERSONA_START, 5, (i) => 200 + i));
-      const [r] = runPortfolioTrader({ archive, sourceId: FIXTURE_SOURCE, persona: holder, now: PERSONA_START + 5 * H, codeCommit: null }) as [Rebalance];
+      archive.upsertCandles(candles("A/USDT", "1h", START, 5, (i) => 200 + i));
+      const [r] = runPortfolioTrader({ archive, sourceId: FIXTURE_SOURCE, persona: holder, start: START, now: START + 5 * H, codeCommit: null }) as [Rebalance];
       expect(r.prices["A/USDT"]).toBe(200);
       const cost = INITIAL_EQUITY * (DEFAULT_COSTS.feeRate + DEFAULT_COSTS.slippage);
       expect(r.costUsd).toBeCloseTo(cost, 9);
       expect(r.holdings["A/USDT"]! * 200).toBeCloseTo(INITIAL_EQUITY - cost, 6);
       expect(r.cash).toBeCloseTo(0, 6);
-      expect(runPortfolioTrader({ archive, sourceId: FIXTURE_SOURCE, persona: holder, now: PERSONA_START + 6 * H, codeCommit: null })).toEqual([]);
+      expect(runPortfolioTrader({ archive, sourceId: FIXTURE_SOURCE, persona: holder, start: START, now: START + 6 * H, codeCommit: null })).toEqual([]);
     });
   });
 });

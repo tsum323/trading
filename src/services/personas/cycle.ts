@@ -1,11 +1,11 @@
-import { TIMEFRAME_MS, type Timeframe, type UnixMs } from "@/core/time";
+import { alignToTimeframe, TIMEFRAME_MS, type Timeframe, type UnixMs } from "@/core/time";
 import type { Gap, MarketDataSource, MarketSymbol } from "@/modules/market-data";
 import type { FileArchive } from "@/modules/storage";
 import { getStrategy } from "@/modules/strategies/registry";
 import { ingestHistory } from "../ingest-history";
 import { runManagerTrader } from "./manager-trader";
 import { runPortfolioTrader } from "./portfolio-trader";
-import { PERSONA_START, PERSONAS } from "./roster";
+import { PERSONAS, PERSONAS_START_PATH, type PersonasStart } from "./roster";
 import { runSignalTrader } from "./signal-trader";
 import { buildBoard, buildPersonasSnapshot, curvesOf } from "./snapshot";
 import { PERSONAS_STATE_PATH, type PersonasSnapshot } from "./types";
@@ -17,6 +17,18 @@ export interface PersonasCycleReport {
   ingest: { symbol: MarketSymbol; timeframe: Timeframe; received: number; gaps: Gap[] }[];
   personas: { id: string; newEntries: number; newExits: number; newSkips: number; rebalances: number }[];
   snapshot: PersonasSnapshot;
+}
+
+/**
+ * Старт счетов: при первом цикле — граница текущей 15-минутной свечи (решения
+ * принимаются только по свечам, закрытым позже), дальше — из ветки `data`.
+ */
+export function personasStart(archive: FileArchive, now: UnixMs, codeCommit: string | null): UnixMs {
+  const saved = archive.readJson<PersonasStart>(PERSONAS_START_PATH);
+  if (saved) return saved.startedAt;
+  const start: PersonasStart = { startedAt: alignToTimeframe(now, "15m"), codeCommit };
+  archive.writeText(PERSONAS_START_PATH, `${JSON.stringify(start, null, 2)}\n`);
+  return start.startedAt;
 }
 
 /** Какие ряды нужны персонажам и сколько истории до старта. */
@@ -55,12 +67,13 @@ export async function runPersonasCycle(opts: {
   const { source, archive } = opts;
   const now = opts.now ?? Date.now;
   const codeCommit = opts.codeCommit ?? null;
+  const start = personasStart(archive, now(), codeCommit);
 
   const ingest: PersonasCycleReport["ingest"] = [];
   for (const { symbol, timeframe, warmupBars } of requiredSeries().values()) {
     const size = TIMEFRAME_MS[timeframe];
     const last = archive.lastCandle(source.id, symbol, timeframe);
-    const from = last ? last.closeTime : PERSONA_START - warmupBars * size;
+    const from = last ? last.closeTime : start - warmupBars * size;
     if (from + size > now()) continue;
     const r = await ingestHistory({
       source, store: archive, symbol, timeframe, from, to: now() + size, now, ...(opts.sleep ? { sleep: opts.sleep } : {}),
@@ -71,24 +84,24 @@ export async function runPersonasCycle(opts: {
   const personas: PersonasCycleReport["personas"] = [];
   for (const p of PERSONAS) {
     if (p.kind === "signals") {
-      const r = runSignalTrader({ archive, sourceId: source.id, persona: p, strategy: getStrategy(p.strategyKey), now: now(), codeCommit });
+      const r = runSignalTrader({ archive, sourceId: source.id, persona: p, strategy: getStrategy(p.strategyKey), start, now: now(), codeCommit });
       personas.push({ id: p.id, newEntries: r.newEntries.length, newExits: r.newExits.length, newSkips: r.newSkips.length, rebalances: 0 });
     } else if (p.kind === "portfolio") {
-      const r = runPortfolioTrader({ archive, sourceId: source.id, persona: p, now: now(), codeCommit });
+      const r = runPortfolioTrader({ archive, sourceId: source.id, persona: p, start, now: now(), codeCommit });
       personas.push({ id: p.id, newEntries: 0, newExits: 0, newSkips: 0, rebalances: r.length });
     }
   }
   // Управляющий решает по кривым капитала остальных, посчитанным после их хода.
-  const board = buildBoard(archive, source.id);
+  const board = buildBoard(archive, source.id, start);
   const curves = curvesOf(board.summaries);
   const names = new Map(PERSONAS.map((p) => [p.id, p.name]));
   for (const p of PERSONAS) {
     if (p.kind !== "manager") continue;
-    const r = runManagerTrader({ archive, persona: p, curves, names, until: board.until, now: now(), codeCommit });
+    const r = runManagerTrader({ archive, persona: p, curves, names, start, until: board.until, now: now(), codeCommit });
     personas.push({ id: p.id, newEntries: 0, newExits: 0, newSkips: 0, rebalances: r.length });
   }
 
-  const snapshot = buildPersonasSnapshot(archive, source.id, now(), codeCommit);
+  const snapshot = buildPersonasSnapshot(archive, source.id, start, now(), codeCommit);
   archive.writeText(PERSONAS_STATE_PATH, `${JSON.stringify(snapshot)}\n`);
   return { ingest, personas, snapshot };
 }

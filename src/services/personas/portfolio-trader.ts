@@ -2,7 +2,7 @@ import { TIMEFRAME_MS, type UnixMs } from "@/core/time";
 import { DEFAULT_COSTS } from "@/modules/backtest";
 import type { Candle, MarketDataSourceId, MarketSymbol } from "@/modules/market-data";
 import type { FileArchive } from "@/modules/storage";
-import { INITIAL_EQUITY, PERSONA_START, type PortfolioPersonaDef } from "./roster";
+import { INITIAL_EQUITY, type PortfolioPersonaDef } from "./roster";
 import { lowerBound, personaPath } from "./signal-trader";
 import type { TradeMode } from "./types";
 
@@ -10,7 +10,7 @@ const DAY = TIMEFRAME_MS["1d"];
 const HOUR = TIMEFRAME_MS["1h"];
 const WEEK = 7 * DAY;
 
-/** Перестановка портфеля: решение в `at` по закрытым дневным свечам, исполнение по open часовой свечи `at`. */
+/** Перестановка портфеля: решение в `at` по закрытым дневным свечам, исполнение по open первой часовой свечи с openTime >= at. */
 export interface Rebalance {
   at: UnixMs;
   prices: Record<MarketSymbol, number>;
@@ -32,13 +32,13 @@ export interface PortfolioCursor {
 }
 
 /** Моменты перестановок в (after, until]: старт и (для weekly) каждый понедельник 00:00 UTC. */
-export function rebalanceTimes(schedule: PortfolioPersonaDef["schedule"], after: UnixMs | null, until: UnixMs): UnixMs[] {
+export function rebalanceTimes(schedule: PortfolioPersonaDef["schedule"], after: UnixMs | null, until: UnixMs, start: UnixMs): UnixMs[] {
   const out: UnixMs[] = [];
-  if (after === null && PERSONA_START <= until) out.push(PERSONA_START);
+  if (after === null && start <= until) out.push(start);
   if (schedule === "weekly") {
     // 1970-01-05 — понедельник.
     const monday0 = Date.UTC(1970, 0, 5);
-    let t = monday0 + Math.ceil((Math.max(after ?? PERSONA_START, PERSONA_START) + 1 - monday0) / WEEK) * WEEK;
+    let t = monday0 + Math.ceil((Math.max(after ?? start, start) + 1 - monday0) / WEEK) * WEEK;
     for (; t <= until; t += WEEK) out.push(t);
   }
   return out;
@@ -70,17 +70,19 @@ export function targetWeights(
 }
 
 /**
- * Один цикл персонажа-портфеля. Перестановка выполняется, только когда закрылась
- * часовая свеча с openTime = at по всем символам — её open и есть цена исполнения.
+ * Один цикл персонажа-портфеля. Перестановка выполняется, только когда по всем
+ * символам закрылась первая часовая свеча с openTime >= at — её open и есть цена
+ * исполнения; до этого момента перестановка ждёт следующего цикла.
  */
 export function runPortfolioTrader(opts: {
   archive: FileArchive;
   sourceId: MarketDataSourceId;
   persona: PortfolioPersonaDef;
+  start: UnixMs;
   now: UnixMs;
   codeCommit: string | null;
 }): Rebalance[] {
-  const { archive, sourceId, persona, now } = opts;
+  const { archive, sourceId, persona, start, now } = opts;
   const cursorPath = personaPath(persona.id, "cursor.json");
   const cursor = archive.readJson<PortfolioCursor>(cursorPath) ?? { launchedAt: now, processedUntil: null };
   const log = personaPath(persona.id, "rebalances");
@@ -89,8 +91,8 @@ export function runPortfolioTrader(opts: {
   const hourly = new Map<MarketSymbol, Candle[]>();
   const daily = new Map<MarketSymbol, Candle[]>();
   for (const symbol of persona.symbols) {
-    hourly.set(symbol, archive.getCandles(sourceId, { symbol, timeframe: "1h", from: PERSONA_START }));
-    daily.set(symbol, archive.getCandles(sourceId, { symbol, timeframe: "1d", from: PERSONA_START - 60 * DAY }));
+    hourly.set(symbol, archive.getCandles(sourceId, { symbol, timeframe: "1h", from: start }));
+    daily.set(symbol, archive.getCandles(sourceId, { symbol, timeframe: "1d", from: start - 60 * DAY }));
   }
   const readyUntil = Math.min(...persona.symbols.map((s) => hourly.get(s)!.at(-1)?.openTime ?? Number.NEGATIVE_INFINITY));
   const openAt = (symbol: MarketSymbol, at: UnixMs): number | undefined => {
@@ -101,12 +103,14 @@ export function runPortfolioTrader(opts: {
 
   const out: Rebalance[] = [];
   let prev = history.at(-1);
-  for (const at of rebalanceTimes(persona.schedule, cursor.processedUntil, readyUntil)) {
+  for (const at of rebalanceTimes(persona.schedule, cursor.processedUntil, readyUntil, start)) {
     const prices: Record<MarketSymbol, number> = {};
     for (const s of persona.symbols) {
       const p = openAt(s, at);
       if (p !== undefined) prices[s] = p;
     }
+    // Свеча исполнения ещё не закрылась хотя бы по одному символу — ждём следующего цикла.
+    if (persona.symbols.some((s) => prices[s] === undefined && (hourly.get(s)!.at(-1)?.openTime ?? 0) < at + HOUR)) break;
     const { weights, note } = targetWeights(persona, daily, at);
     const holdings = prev?.holdings ?? {};
     const cash = prev?.cash ?? INITIAL_EQUITY;

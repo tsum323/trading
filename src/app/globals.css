@@ -209,3 +209,9 @@ td.wrap { white-space: normal; min-width: 220px; font-family: var(--font-sans); 
 .risk-badge.risk-cautious { color: var(--warn); }
 .risk-badge.risk-defensive, .risk-badge.risk-daily-stop, .risk-badge.risk-paused { color: var(--bad); }
 .kv dd .risk-badge { display: inline-block; }
+.live-dot::before {
+  content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%;
+  background: var(--good); vertical-align: 1px; animation: live-pulse 2s ease-in-out infinite;
+}
+@keyframes live-pulse { 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .live-dot::before { animation: none; } }

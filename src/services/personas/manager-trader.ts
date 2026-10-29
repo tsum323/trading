@@ -2,7 +2,7 @@ import { TIMEFRAME_MS, type UnixMs } from "@/core/time";
 import { DEFAULT_COSTS } from "@/modules/backtest";
 import type { FileArchive } from "@/modules/storage";
 import { rebalanceTimes, type PortfolioCursor } from "./portfolio-trader";
-import { INITIAL_EQUITY, PERSONA_START, type ManagerPersonaDef } from "./roster";
+import { INITIAL_EQUITY, type ManagerPersonaDef } from "./roster";
 import { personaPath } from "./signal-trader";
 import type { TradeMode } from "./types";
 
@@ -40,13 +40,14 @@ export function managerWeights(
   curves: ReadonlyMap<string, Curve>,
   at: UnixMs,
   names: ReadonlyMap<string, string>,
+  start: UnixMs,
 ): { weights: Record<string, number>; scores: Record<string, number>; note: string } {
   const ids = persona.candidates.filter((id) => curves.has(id));
-  if (at <= PERSONA_START) {
+  if (at <= start) {
     const w = Math.min(persona.maxWeight, 1 / ids.length);
     return { weights: Object.fromEntries(ids.map((id) => [id, w])), scores: {}, note: "старт: поровну, результатов ещё нет" };
   }
-  const from = Math.max(PERSONA_START, at - persona.lookbackDays * DAY);
+  const from = Math.max(start, at - persona.lookbackDays * DAY);
   const scores = Object.fromEntries(ids.map((id) => [id, curveAt(curves.get(id)!, at) / curveAt(curves.get(id)!, from) - 1]));
   const positive = ids.filter((id) => scores[id]! > 0);
   const total = positive.reduce((s, id) => s + scores[id]!, 0);
@@ -102,7 +103,7 @@ export function managerCurve(log: readonly ManagerRebalance[], curves: ReadonlyM
     return [t, total(t)];
   });
   while (i < log.length) apply(log[i++]!);
-  const last = grid.at(-1) ?? PERSONA_START;
+  const last = grid.at(-1) ?? 0;
   return { curve, allocations: Object.fromEntries([...alloc.keys()].map((id) => [id, value(id, last)])), cash, costs };
 }
 
@@ -112,16 +113,17 @@ export function runManagerTrader(opts: {
   persona: ManagerPersonaDef;
   curves: ReadonlyMap<string, Curve>;
   names: ReadonlyMap<string, string>;
+  start: UnixMs;
   until: UnixMs;
   now: UnixMs;
   codeCommit: string | null;
 }): ManagerRebalance[] {
-  const { archive, persona, now } = opts;
+  const { archive, persona, start, now } = opts;
   const cursorPath = personaPath(persona.id, "cursor.json");
   const cursor = archive.readJson<PortfolioCursor>(cursorPath) ?? { launchedAt: now, processedUntil: null };
   const out: ManagerRebalance[] = [];
-  for (const at of rebalanceTimes("weekly", cursor.processedUntil, opts.until)) {
-    const { weights, scores, note } = managerWeights(persona, opts.curves, at, opts.names);
+  for (const at of rebalanceTimes("weekly", cursor.processedUntil, opts.until, start)) {
+    const { weights, scores, note } = managerWeights(persona, opts.curves, at, opts.names, start);
     const mode: TradeMode = at + TIMEFRAME_MS["1h"] < cursor.launchedAt ? "replay" : now - at > 2 * TIMEFRAME_MS["1h"] ? "late" : "live";
     out.push({ at, weights, scores, note, recordedAt: now, codeCommit: opts.codeCommit, mode });
     cursor.processedUntil = at;
