@@ -1,0 +1,34 @@
+name: Probe futures data sources
+
+# Временная проверка доступности публичных источников funding / open interest с раннера GitHub.
+on:
+  push:
+    branches: [probe/futures-sources]
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe
+        run: |
+          probe() {
+            echo "=== $1"
+            curl -sS -m 20 -D - -o body.txt -H "Origin: https://tsum323.github.io" "$1" | grep -iE "^HTTP|access-control-allow-origin" || true
+            head -c 400 body.txt; echo
+          }
+          probe "https://fapi.binance.com/fapi/v1/fundingRate?symbol=BTCUSDT&limit=2"
+          probe "https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT"
+          probe "https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=1h&limit=2"
+          probe "https://data.binance.vision/data/futures/um/daily/metrics/BTCUSDT/BTCUSDT-metrics-$(date -u -d yesterday +%Y-%m-%d).zip"
+          probe "https://data.binance.vision/data/futures/um/monthly/fundingRate/BTCUSDT/BTCUSDT-fundingRate-$(date -u -d 'last month' +%Y-%m).zip"
+          probe "https://www.okx.com/api/v5/public/funding-rate-history?instId=BTC-USDT-SWAP&limit=2"
+          probe "https://www.okx.com/api/v5/rubik/stat/contracts/open-interest-history?instId=BTC-USDT-SWAP&period=1H&limit=2"
+          probe "https://api.bybit.com/v5/market/funding/history?category=linear&symbol=BTCUSDT&limit=2"
+          probe "https://api.bybit.com/v5/market/open-interest?category=linear&symbol=BTCUSDT&intervalTime=1h&limit=2"
+          probe "https://www.deribit.com/api/v2/public/get_funding_rate_history?instrument_name=BTC-PERPETUAL&start_timestamp=$(( ($(date +%s) - 86400) * 1000 ))&end_timestamp=$(( $(date +%s) * 1000 ))"
+          echo "=== hyperliquid"
+          curl -sS -m 20 -D - -o body.txt -H "Content-Type: application/json" -d '{"type":"fundingHistory","coin":"BTC","startTime":1793000000000}' https://api.hyperliquid.xyz/info | grep -iE "^HTTP|access-control" || true
+          head -c 300 body.txt; echo
