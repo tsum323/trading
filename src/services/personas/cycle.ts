@@ -1,7 +1,8 @@
 import { alignToTimeframe, TIMEFRAME_MS, type Timeframe, type UnixMs } from "@/core/time";
 import type { Gap, MarketDataSource, MarketSymbol } from "@/modules/market-data";
 import type { FileArchive } from "@/modules/storage";
-import { getStrategy } from "@/modules/strategies/registry";
+import { FactorArchive, ingestFactors, type FactorIngestReport, type VisionDeps } from "@/modules/derivatives/vision";
+import { FACTOR_STRATEGY_IDS, getStrategy, type StrategyDeps } from "@/modules/strategies/registry";
 import { ingestHistory } from "../ingest-history";
 import { runManagerTrader } from "./manager-trader";
 import { runPortfolioTrader } from "./portfolio-trader";
@@ -12,10 +13,13 @@ import { PERSONAS_STATE_PATH, type PersonasSnapshot } from "./types";
 
 /** Запас дневных свечей до старта: окно импульса Ротатора (28 дн.) с запасом. */
 const DAILY_WARMUP_BARS = 40;
+/** Запас факторов фьючерсов до старта: 90-дневное окно сравнения с запасом. */
+const FACTOR_WARMUP_MS = 120 * 86_400_000;
 
 export interface PersonasCycleReport {
   ingest: { symbol: MarketSymbol; timeframe: Timeframe; received: number; gaps: Gap[] }[];
   personas: { id: string; newEntries: number; newExits: number; newSkips: number; rebalances: number }[];
+  factors: FactorIngestReport[];
   snapshot: PersonasSnapshot;
 }
 
@@ -63,6 +67,8 @@ export async function runPersonasCycle(opts: {
   now?: () => UnixMs;
   codeCommit?: string | null;
   sleep?: (ms: number) => Promise<void>;
+  /** Источник факторов фьючерсов (в тестах — заглушка). */
+  factorDeps?: VisionDeps;
 }): Promise<PersonasCycleReport> {
   const { source, archive } = opts;
   const now = opts.now ?? Date.now;
@@ -81,10 +87,20 @@ export async function runPersonasCycle(opts: {
     ingest.push({ symbol, timeframe, received: r.received - r.unclosedReceived, gaps: r.gaps });
   }
 
+  // Факторы фьючерсов — для персонажей, чьи стратегии на них опираются.
+  const factorSymbols = [...new Set(PERSONAS.flatMap((p) => (p.kind === "signals" && FACTOR_STRATEGY_IDS.has(p.strategyKey) ? p.symbols : [])))];
+  let deps: StrategyDeps = {};
+  let factors: FactorIngestReport[] = [];
+  if (factorSymbols.length > 0) {
+    const factorArchive = new FactorArchive(archive.root);
+    factors = await ingestFactors({ archive: factorArchive, symbols: factorSymbols, from: start - FACTOR_WARMUP_MS, now: now(), ...(opts.factorDeps ? { deps: opts.factorDeps } : {}) });
+    deps = { factors: factorArchive.book(factorSymbols, start - FACTOR_WARMUP_MS) };
+  }
+
   const personas: PersonasCycleReport["personas"] = [];
   for (const p of PERSONAS) {
     if (p.kind === "signals") {
-      const r = runSignalTrader({ archive, sourceId: source.id, persona: p, strategy: getStrategy(p.strategyKey), start, now: now(), codeCommit });
+      const r = runSignalTrader({ archive, sourceId: source.id, persona: p, strategy: getStrategy(p.strategyKey, deps), start, now: now(), codeCommit });
       personas.push({ id: p.id, newEntries: r.newEntries.length, newExits: r.newExits.length, newSkips: r.newSkips.length, rebalances: 0 });
     } else if (p.kind === "portfolio") {
       const r = runPortfolioTrader({ archive, sourceId: source.id, persona: p, start, now: now(), codeCommit });
@@ -103,5 +119,5 @@ export async function runPersonasCycle(opts: {
 
   const snapshot = buildPersonasSnapshot(archive, source.id, start, now(), codeCommit);
   archive.writeText(PERSONAS_STATE_PATH, `${JSON.stringify(snapshot)}\n`);
-  return { ingest, personas, snapshot };
+  return { ingest, personas, factors, snapshot };
 }

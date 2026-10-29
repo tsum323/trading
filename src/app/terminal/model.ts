@@ -2,7 +2,7 @@ import { TIMEFRAME_MS, type Timeframe, type UnixMs } from "@/core/time";
 import { DEFAULT_COSTS, runBacktest, type SignalOutcome, type Trade } from "@/modules/backtest";
 import { atr, ema } from "@/modules/indicators";
 import type { Candle } from "@/modules/market-data";
-import { getStrategy, STRATEGY_IDS } from "@/modules/strategies/registry";
+import { FACTOR_STRATEGY_IDS, getStrategy, STRATEGY_IDS } from "@/modules/strategies/registry";
 import type { Strategy, TradingSignal } from "@/modules/strategies";
 
 export const TERMINAL_SYMBOLS = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT", "XRP/USDT"] as const;
@@ -17,7 +17,10 @@ const INDICATOR_WARMUP = 250;
  * несколько записей реестра делят один id (donchian-breakout 1h и 4h).
  */
 export function strategiesFor(tf: Timeframe): { key: string; strategy: Strategy }[] {
-  return STRATEGY_IDS.map((key) => ({ key, strategy: getStrategy(key) })).filter((e) => e.strategy.timeframe === tf);
+  // Стратегиям на факторах фьючерсов нужен архив факторов — в реплее терминала их нет.
+  return STRATEGY_IDS.filter((key) => !FACTOR_STRATEGY_IDS.has(key))
+    .map((key) => ({ key, strategy: getStrategy(key) }))
+    .filter((e) => e.strategy.timeframe === tf);
 }
 
 /** Сколько свечей грузить: видимая часть + прогрев самой «длинной» стратегии или индикатора. */

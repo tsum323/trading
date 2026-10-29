@@ -47,10 +47,11 @@ class PriceBook {
 }
 
 /** Точки кривой: старт, затем границы 4-часовых свечей, последняя — `until`. */
-function curveGrid(start: UnixMs, until: UnixMs): UnixMs[] {
+export function curveGrid(start: UnixMs, until: UnixMs): UnixMs[] {
   const out: UnixMs[] = [start];
   for (let t = Math.floor(start / CURVE_STEP) * CURVE_STEP + CURVE_STEP; t < until; t += CURVE_STEP) out.push(t);
-  out.push(until);
+  // Сразу после старта закрытых свечей ещё нет: until = start, вторая точка не нужна.
+  if (until > start) out.push(until);
   return out;
 }
 

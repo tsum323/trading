@@ -7,6 +7,9 @@ describe("traders model", () => {
     const ids = ["trend", "sniper", "coin"];
     expect(colorVarFor(ids, "coin")).toBe("--p-3");
     expect(colorVarFor(["coin", ...ids.slice(0, 2)], "trend")).toBe("--p-2");
+    // Холдер — эталон: нейтральный цвет, и он не сдвигает остальных.
+    expect(colorVarFor(["trend", "holder", "coin"], "holder")).toBe("--p-ref");
+    expect(colorVarFor(["trend", "holder", "coin"], "coin")).toBe("--p-2");
   });
 
   it("describes portfolio weights including the cash share", () => {
