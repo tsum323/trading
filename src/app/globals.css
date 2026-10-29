@@ -23,6 +23,8 @@
   --p-5: #e87ba4;
   --p-6: #6250d6;
   --p-7: #008300;
+  --p-8: #e34948;
+  --p-ref: #8a8f98;
   --radius: 10px;
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
@@ -54,6 +56,8 @@
     --p-5: #d55181;
     --p-6: #9085e9;
     --p-7: #008300;
+    --p-8: #e66767;
+    --p-ref: #8a919c;
     color-scheme: dark;
   }
 }

@@ -28,6 +28,9 @@ async function main() {
     const gaps = i.gaps.reduce((s, g) => s + g.missing, 0);
     console.log(`${i.symbol} ${i.timeframe}: +${i.received} closed candles${gaps ? `, ${gaps} missing` : ""}`);
   }
+  for (const f of report.factors) {
+    console.log(`factors ${f.symbol}: +${f.rows} hourly rows, last day ${f.lastDay ?? "—"}${f.missingDays.length ? `, missing ${f.missingDays.join(" ")}` : ""}`);
+  }
   for (const p of report.snapshot.personas) {
     const r = report.personas.find((x) => x.id === p.id)!;
     console.log(

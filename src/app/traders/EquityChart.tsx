@@ -75,6 +75,8 @@ export function EquityChart({ personas, colorVar, visible, selected, initialEqui
       s.applyOptions({
         color: css(colorVar(p.id)),
         lineWidth: selected === p.id ? 3 : 2,
+        // Эталон (Холдер) — пунктиром нейтрального цвета.
+        lineStyle: colorVar(p.id) === "--p-ref" ? 2 : 0,
         visible: visible.has(p.id),
         lastValueVisible: !dim,
       });

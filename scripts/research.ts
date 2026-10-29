@@ -13,7 +13,8 @@ import { join } from "node:path";
 import { parseArgs } from "node:util";
 import { BinanceSpotSource } from "@/modules/market-data";
 import { FileArchive } from "@/modules/storage";
-import { getStrategy } from "@/modules/strategies/registry";
+import { FactorArchive, ingestFactors } from "@/modules/derivatives/vision";
+import { FACTOR_STRATEGY_IDS, getStrategy } from "@/modules/strategies/registry";
 import {
   assertHoldoutAllowed,
   journalEntry,
@@ -57,7 +58,6 @@ async function main() {
   const codeCommit = process.env.GITHUB_SHA ?? null;
 
   const archive = new FileArchive(values.archive);
-  const strategy = getStrategy(values.strategy);
   const symbols = values.symbols.split(",").map((s) => s.trim()).filter(Boolean);
 
   const splitPath = join(values.archive, SPLIT_FILE);
@@ -74,6 +74,18 @@ async function main() {
     archive.writeText(SPLIT_FILE, `${JSON.stringify(plan, null, 2)}\n`);
     console.error(`Created ${SPLIT_FILE}: ${JSON.stringify(plan)}`);
   }
+
+  // Стратегиям на факторах — архив факторов фьючерсов с запасом на 90-дневное окно.
+  let factors;
+  if (FACTOR_STRATEGY_IDS.has(values.strategy)) {
+    const factorArchive = new FactorArchive(values.archive);
+    const from = plan.from - 120 * 86_400_000;
+    for (const r of await ingestFactors({ archive: factorArchive, symbols, from })) {
+      console.error(`factors ${r.symbol}: ${r.days} days, last ${r.lastDay}${r.missingDays.length ? `, missing ${r.missingDays.join(" ")}` : ""}`);
+    }
+    factors = factorArchive.book(symbols, from);
+  }
+  const strategy = getStrategy(values.strategy, factors ? { factors } : {});
 
   const journal = archive.readJsonl<JournalEntry>(JOURNAL);
   if (segment === "holdout") assertHoldoutAllowed(journal, strategy);

@@ -1,11 +1,16 @@
 import type { FeedEvent, PersonaSummary, RiskStatus, TradeState } from "@/services/personas/types";
 
 /** Цвета персонажей по фиксированному порядку ростера (не по месту в рейтинге). */
-export const PERSONA_COLOR_VARS = ["--p-1", "--p-2", "--p-3", "--p-4", "--p-5", "--p-6", "--p-7"] as const;
+export const PERSONA_COLOR_VARS = ["--p-1", "--p-2", "--p-3", "--p-4", "--p-5", "--p-6", "--p-7", "--p-8"] as const;
+
+/** Эталон «ничего не делать» — нейтральная линия, а не цвет из палитры. */
+export const REFERENCE_PERSONA = "holder";
+export const REFERENCE_COLOR_VAR = "--p-ref";
 
 export function colorVarFor(personaIds: readonly string[], id: string): string {
-  const i = personaIds.indexOf(id);
-  return PERSONA_COLOR_VARS[i % PERSONA_COLOR_VARS.length] ?? "--text-muted";
+  if (id === REFERENCE_PERSONA) return REFERENCE_COLOR_VAR;
+  const i = personaIds.filter((x) => x !== REFERENCE_PERSONA).indexOf(id);
+  return i < 0 ? "--text-muted" : (PERSONA_COLOR_VARS[i % PERSONA_COLOR_VARS.length] ?? "--text-muted");
 }
 
 /** Сделок меньше — место в рейтинге ничего не говорит о стратегии. */
