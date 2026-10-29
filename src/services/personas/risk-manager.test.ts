@@ -116,3 +116,18 @@ describe("manager", () => {
     expect(curveAt(curves.get("a")!, START - 1)).toBe(INITIAL_EQUITY);
   });
 });
+
+describe("equity curve grid", () => {
+  it("is strictly increasing, including right after the start", async () => {
+    const { curveGrid } = await import("./snapshot");
+    const start = Date.UTC(2026, 9, 29, 9);
+    expect(curveGrid(start, start)).toEqual([start]);
+    const g = curveGrid(start, start + 10 * H);
+    expect(g[0]).toBe(start);
+    expect(g.at(-1)).toBe(start + 10 * H);
+    expect(g.every((t, i) => i === 0 || t > g[i - 1]!)).toBe(true);
+    // Конец ровно на границе 4 часов не дублируется.
+    const edge = curveGrid(start, Date.UTC(2026, 9, 29, 16));
+    expect(new Set(edge).size).toBe(edge.length);
+  });
+});

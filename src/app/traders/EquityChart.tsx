@@ -80,7 +80,14 @@ export function EquityChart({ personas, colorVar, visible, selected, initialEqui
         visible: visible.has(p.id),
         lastValueVisible: !dim,
       });
-      s.setData(p.curve.map(([t, v]) => ({ time: Math.floor(t / 1000) as UTCTimestamp, value: v })));
+      // График требует строго возрастающего времени (в секундах): одинаковые секунды схлопываем.
+      const points: { time: UTCTimestamp; value: number }[] = [];
+      for (const [t, v] of p.curve) {
+        const time = Math.floor(t / 1000) as UTCTimestamp;
+        if (points.length > 0 && points.at(-1)!.time >= time) points[points.length - 1] = { time: points.at(-1)!.time, value: v };
+        else points.push({ time, value: v });
+      }
+      s.setData(points);
     }
     c.timeScale().fitContent();
   }, [personas, colorVar, visible, selected, initialEquity, theme]);
