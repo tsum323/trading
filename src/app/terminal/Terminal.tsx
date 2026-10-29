@@ -278,11 +278,24 @@ function Journal({ overview }: { overview: Load<Overview> }) {
                   <td>{e.strategyId}@{e.strategyVersion}</td>
                   <td title={e.symbols.join(", ")}>{e.symbols.length <= 2 ? e.symbols.map((s) => s.split("/")[0]).join(", ") : `${e.symbols.length} пар`}</td>
                   <td>{e.segment}</td>
-                  <td>{e.trades}</td>
-                  <td>{fmtR(e.expectancyR)}</td>
-                  <td>{e.ci95 ? `[${fmtNum(e.ci95[0], 3)}; ${fmtNum(e.ci95[1], 3)}]` : "—"}</td>
-                  <td>{fmtR(e.grossExpectancyR)}</td>
-                  <td>{fmtR(e.baselineP95)}</td>
+                  {e.unit === "weekly-return" ? (
+                    // Ротация: недели и средняя недельная доходность портфеля вместо сделок и R.
+                    <>
+                      <td>{e.trades} нед.</td>
+                      <td>{fmtPct(e.expectancyR)} / нед.</td>
+                      <td>{e.ci95 ? `[${fmtPct(e.ci95[0])}; ${fmtPct(e.ci95[1])}]` : "—"}</td>
+                      <td>{fmtPct(e.grossExpectancyR)}</td>
+                      <td>{fmtPct(e.baselineP95)}</td>
+                    </>
+                  ) : (
+                    <>
+                      <td>{e.trades}</td>
+                      <td>{fmtR(e.expectancyR)}</td>
+                      <td>{e.ci95 ? `[${fmtNum(e.ci95[0], 3)}; ${fmtNum(e.ci95[1], 3)}]` : "—"}</td>
+                      <td>{fmtR(e.grossExpectancyR)}</td>
+                      <td>{fmtR(e.baselineP95)}</td>
+                    </>
+                  )}
                   <td><span className={`verdict ${e.verdict}`}>{e.verdict}</span></td>
                 </tr>
               ))}

@@ -74,6 +74,11 @@ export interface JournalEntry {
   baselineP95: number;
   verdict: VerdictReport["verdict"];
   checks: CheckResult[];
+  /**
+   * Единица trades/expectancyR/ci95/baselineP95: по умолчанию сделки и R;
+   * «weekly-return» — недели и недельная доходность портфеля (ротация).
+   */
+  unit?: "R" | "weekly-return";
 }
 
 export class HoldoutUsedError extends Error {
@@ -84,7 +89,7 @@ export class HoldoutUsedError extends Error {
  * Отложенная выборка проверяется один раз на версию стратегии. Повторная
  * проверка после изменений требует новой версии и новых данных.
  */
-export function assertHoldoutAllowed(journal: readonly JournalEntry[], strategy: Strategy): void {
+export function assertHoldoutAllowed(journal: readonly JournalEntry[], strategy: Pick<Strategy, "id" | "version">): void {
   const used = journal.find((e) => e.segment === "holdout" && e.strategyId === strategy.id && e.strategyVersion === strategy.version);
   if (used) {
     throw new HoldoutUsedError(

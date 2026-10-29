@@ -11,12 +11,15 @@
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
-import { BinanceSpotSource } from "@/modules/market-data";
+import { BinanceSpotSource, type Candle } from "@/modules/market-data";
 import { FileArchive } from "@/modules/storage";
 import { FactorArchive, ingestFactors } from "@/modules/derivatives/vision";
 import { FACTOR_STRATEGY_IDS, getStrategy } from "@/modules/strategies/registry";
+import { ingestHistory } from "@/services/ingest-history";
+import { renderRotationReport, rotationJournalEntry, ROTATION_ID, ROTATION_UNIVERSE, ROTATION_VERSION, runRotationResearch } from "@/services/rotation-research";
 import {
   assertHoldoutAllowed,
+  segmentRange,
   journalEntry,
   JOURNAL,
   planSplit,
@@ -75,6 +78,11 @@ async function main() {
     console.error(`Created ${SPLIT_FILE}: ${JSON.stringify(plan)}`);
   }
 
+  if (values.strategy === ROTATION_ID) {
+    await runRotation(archive, plan, segment, { at, codeCommit, seed, runs, baseUrl: values["base-url"] });
+    return;
+  }
+
   // Стратегиям на факторах — архив факторов фьючерсов с запасом на 90-дневное окно.
   let factors;
   if (FACTOR_STRATEGY_IDS.has(values.strategy)) {
@@ -100,6 +108,37 @@ async function main() {
   const md = renderResearchReport(result, plan, [...journal, entry], { at, codeCommit });
   const stamp = new Date(at).toISOString().slice(0, 16).replace(":", "");
   archive.writeText(`reports/research/${stamp}-${strategy.id}-${segment}.md`, md);
+  console.log(md);
+  if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, md);
+}
+
+/** Недельная ротация (docs/strategy-rotation.md): портфель, а не сделки по сигналам. Корзина фиксирована. */
+async function runRotation(
+  archive: FileArchive,
+  plan: SplitPlan,
+  segment: Segment,
+  meta: { at: number; codeCommit: string | null; seed: number; runs: number; baseUrl: string | undefined },
+) {
+  const journal = archive.readJsonl<JournalEntry>(JOURNAL);
+  if (segment === "holdout") assertHoldoutAllowed(journal, { id: ROTATION_ID, version: ROTATION_VERSION });
+  const range = segmentRange(plan, segment);
+  if (range.to > meta.at) throw new RangeError(`Segment ${segment} ends in the future`);
+  console.error(`Rotation uses its pre-registered basket: ${ROTATION_UNIVERSE.join(", ")} (--symbols ignored).`);
+  const source = new BinanceSpotSource(meta.baseUrl ? { baseUrl: meta.baseUrl } : {});
+  const from = range.from - 40 * 86_400_000;
+  const daily = new Map<string, Candle[]>();
+  for (const symbol of ROTATION_UNIVERSE) {
+    const r = await ingestHistory({ source, store: archive, symbol, timeframe: "1d", from, to: range.to });
+    const gaps = r.gaps.reduce((a, g) => a + g.missing, 0);
+    console.error(`${symbol} 1d: ${r.storedClosed}/${r.expected} candles${gaps ? `, ${gaps} missing` : ""}`);
+    daily.set(symbol, archive.getCandles(source.id, { symbol, timeframe: "1d", from, to: range.to }));
+  }
+  const result = runRotationResearch({ daily, range, segment, runs: meta.runs, seed: meta.seed });
+  const entry = rotationJournalEntry(result, meta);
+  archive.appendJsonl(JOURNAL, [entry]);
+  const md = renderRotationReport(result, plan, meta);
+  const stamp = new Date(meta.at).toISOString().slice(0, 16).replace(":", "");
+  archive.writeText(`reports/research/${stamp}-${ROTATION_ID}-${segment}.md`, md);
   console.log(md);
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, md);
 }

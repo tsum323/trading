@@ -12,15 +12,15 @@ on:
       strategy:
         description: "Стратегия"
         type: choice
-        options: [crowding, donchian-breakout-4h-oi, donchian-breakout, donchian-breakout-4h, donchian-breakout-4h-long, trend-pullback]
-        default: crowding
+        options: [rotation, crowding, donchian-breakout-4h-oi, donchian-breakout, donchian-breakout-4h, donchian-breakout-4h-long, trend-pullback]
+        default: rotation
       segment:
         description: "Часть разбиения"
         type: choice
         options: [research, validation, holdout]
         default: research
       symbols:
-        description: "Символы через запятую"
+        description: "Символы через запятую (rotation использует свою зафиксированную корзину)"
         default: "BTC/USDT,ETH/USDT,SOL/USDT,BNB/USDT,XRP/USDT"
       from:
         description: "Начало периода (только при первом запуске; по умолчанию — 24 месяца до начала текущего месяца)"
