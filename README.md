@@ -157,12 +157,12 @@ reports/research/*.md      отчёт каждого прогона
 
 ```
 candles/binance-spot/<BASE-QUOTE>/<tf>/<YYYY-MM>.csv  закрытые свечи по месяцам
-personas/<id>/entries.jsonl     сделки персонажа (только дописываются)
-personas/<id>/exits.jsonl       исходы сделок
-personas/<id>/skips.jsonl       сигналы, пропущенные ради защиты капитала
-personas/<id>/rebalances.jsonl  перестановки портфеля (Ротатор, Холдер, Управляющий)
-personas/<id>/cursor.json       до какой свечи обработаны решения
-personas/state.json             сводка для сайта
+personas/run-2/<id>/entries.jsonl     сделки персонажа (только дописываются)
+personas/run-2/<id>/exits.jsonl       исходы сделок
+personas/run-2/<id>/skips.jsonl       сигналы, пропущенные ради защиты капитала
+personas/run-2/<id>/rebalances.jsonl  перестановки портфеля (Ротатор, Холдер, Управляющий)
+personas/run-2/<id>/cursor.json       до какой свечи обработаны решения
+personas/run-2/state.json       сводка для сайта (run-2 — 10 монет; запуск 1 — в personas/)
 factors/binance-um/<BASE-QUOTE>/1h/<YYYY-MM>.csv  факторы фьючерсов (открытый интерес,
                                 long/short, taker, премия) из data.binance.vision
 ```

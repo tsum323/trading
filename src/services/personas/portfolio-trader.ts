@@ -1,8 +1,7 @@
 import { TIMEFRAME_MS, type UnixMs } from "@/core/time";
-import { DEFAULT_COSTS } from "@/modules/backtest";
 import type { Candle, MarketDataSourceId, MarketSymbol } from "@/modules/market-data";
 import type { FileArchive } from "@/modules/storage";
-import { INITIAL_EQUITY, type PortfolioPersonaDef } from "./roster";
+import { costsFor, INITIAL_EQUITY, type PortfolioPersonaDef } from "./roster";
 import { lowerBound, personaPath } from "./signal-trader";
 import type { TradeMode } from "./types";
 
@@ -117,11 +116,11 @@ export function runPortfolioTrader(opts: {
     // Символ без цены исполнения: позицию не трогаем, новую не открываем.
     const tradable = (s: MarketSymbol) => prices[s] !== undefined;
     const equityBefore = cash + Object.entries(holdings).reduce((v, [s, q]) => v + q * (prices[s] ?? prev!.prices[s] ?? 0), 0);
-    const costRate = DEFAULT_COSTS.feeRate + DEFAULT_COSTS.slippage;
+    const costRate = (s: MarketSymbol) => costsFor(s).feeRate + costsFor(s).slippage;
     const current = (s: MarketSymbol) => (holdings[s] ?? 0) * (prices[s] ?? 0);
     const symbols = [...new Set([...Object.keys(holdings), ...Object.keys(weights)])].filter(tradable);
-    const turnover = symbols.reduce((v, s) => v + Math.abs((weights[s] ?? 0) * equityBefore - current(s)), 0);
-    const costUsd = turnover * costRate;
+    // Издержки — с объёма перестановки по каждой монете, со своим проскальзыванием.
+    const costUsd = symbols.reduce((v, s) => v + Math.abs((weights[s] ?? 0) * equityBefore - current(s)) * costRate(s), 0);
     const scale = (equityBefore - costUsd) / equityBefore;
     const next: Record<MarketSymbol, number> = {};
     for (const [s, q] of Object.entries(holdings)) if (!tradable(s) && q > 0) next[s] = q;

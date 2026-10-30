@@ -5,8 +5,8 @@ import { lossPerUnit } from "@/modules/risk";
 import type { FileArchive } from "@/modules/storage";
 import type { Strategy, TradingSignal } from "@/modules/strategies";
 import { decideRisk, tradeEdge, type ClosedTrade, type SkipReason } from "./risk-manager";
-import { MAX_POSITION_SHARE, type SignalPersonaDef } from "./roster";
-import type { TradeMode } from "./types";
+import { costsFor, MAX_POSITION_SHARE, type SignalPersonaDef } from "./roster";
+import { PERSONAS_ROOT, type TradeMode } from "./types";
 
 /** Сделка персонажа: сигнал и размер позиции, записанные в момент `recordedAt`. */
 export interface PersonaEntry {
@@ -49,7 +49,7 @@ export interface PersonaCursor {
   processed: Record<MarketSymbol, UnixMs>;
 }
 
-export const personaPath = (id: string, name: string) => `personas/${id}/${name}`;
+export const personaPath = (id: string, name: string) => `${PERSONAS_ROOT}/${id}/${name}`;
 
 export interface SignalTraderReport {
   newEntries: PersonaEntry[];
@@ -119,7 +119,7 @@ export function runSignalTrader(opts: {
   const evaluate = (s: TradingSignal): Evaluation => {
     const series = candles.get(s.symbol) ?? [];
     const i = lowerBound(series, s.basisCloseTime);
-    return evaluateSignal(s, series.slice(i, i + windowBars(s) + 1), asOf(s.symbol));
+    return evaluateSignal(s, series.slice(i, i + windowBars(s) + 1), asOf(s.symbol), costsFor(s.symbol));
   };
 
   const evals = new Map<string, Evaluation>();
@@ -160,7 +160,7 @@ export function runSignalTrader(opts: {
     }
     const mode: TradeMode = s.createdAt + size < cursor.launchedAt ? "replay" : now - s.createdAt > size ? "late" : "live";
     // Невыгодная сделка: цель слишком близко к стопу или издержки съедают прибыль.
-    const edge = tradeEdge(s, DEFAULT_COSTS);
+    const edge = tradeEdge(s, costsFor(s.symbol));
     if (!edge.worth) {
       newSkips.push({
         signalId: s.id, symbol: s.symbol, direction: s.direction, createdAt: s.createdAt, reason: "not-worth", drawdown: 0,

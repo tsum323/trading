@@ -10,7 +10,7 @@ import { FileArchive } from "@/modules/storage";
 import type { Strategy } from "@/modules/strategies";
 import { FIXTURE_SOURCE } from "@/test/fixtures";
 import { rebalanceTimes, runPortfolioTrader, targetWeights, type Rebalance } from "./portfolio-trader";
-import { INITIAL_EQUITY, MAX_POSITION_SHARE, RISK_PER_TRADE, type PortfolioPersonaDef, type SignalPersonaDef } from "./roster";
+import { costsFor, INITIAL_EQUITY, MAX_POSITION_SHARE, MINOR_SLIPPAGE, RISK_PER_TRADE, type PortfolioPersonaDef, type SignalPersonaDef } from "./roster";
 import { personaPath, runSignalTrader, type PersonaEntry, type PersonaExit } from "./signal-trader";
 
 /** Старт счетов в тестах. */
@@ -181,7 +181,10 @@ describe("personas", () => {
       archive.upsertCandles(candles("A/USDT", "1h", START, 5, (i) => 200 + i));
       const [r] = runPortfolioTrader({ archive, sourceId: FIXTURE_SOURCE, persona: holder, start: START, now: START + 5 * H, codeCommit: null }) as [Rebalance];
       expect(r.prices["A/USDT"]).toBe(200);
-      const cost = INITIAL_EQUITY * (DEFAULT_COSTS.feeRate + DEFAULT_COSTS.slippage);
+      // A/USDT не входит в крупные пары: проскальзывание повышенное.
+      const cost = INITIAL_EQUITY * (costsFor("A/USDT").feeRate + costsFor("A/USDT").slippage);
+      expect(costsFor("A/USDT").slippage).toBe(MINOR_SLIPPAGE);
+      expect(costsFor("BTC/USDT")).toEqual(DEFAULT_COSTS);
       expect(r.costUsd).toBeCloseTo(cost, 9);
       expect(r.holdings["A/USDT"]! * 200).toBeCloseTo(INITIAL_EQUITY - cost, 6);
       expect(r.cash).toBeCloseTo(0, 6);

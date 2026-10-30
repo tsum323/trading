@@ -126,6 +126,8 @@ export interface PersonasSnapshot {
   riskPerTrade: number;
   maxPositionShare: number;
   costs: { feeRate: number; slippage: number };
+  /** Проскальзывание по символам (у менее ликвидных монет выше). */
+  slippageBySymbol: Record<MarketSymbol, number>;
   codeCommit: string | null;
   /** Последняя закрытая часовая свеча по символу. */
   prices: Record<MarketSymbol, { price: number; time: UnixMs }>;
@@ -133,4 +135,10 @@ export interface PersonasSnapshot {
   feed: FeedEvent[];
 }
 
-export const PERSONAS_STATE_PATH = "personas/state.json";
+/**
+ * Каталог текущего запуска персонажей в ветке `data`. Новый запуск (другой состав
+ * монет или правил) — новый каталог: прежние журналы остаются как есть.
+ * run-1 (корень personas/) — 5 монет, 2026-10-29; run-2 — 10 монет.
+ */
+export const PERSONAS_ROOT = "personas/run-2";
+export const PERSONAS_STATE_PATH = `${PERSONAS_ROOT}/state.json`;

@@ -14,7 +14,7 @@ const trade: PersonaTrade = {
 
 // Тестовая сводка с условными ценами — не рыночные данные.
 const snapshot: PersonasSnapshot = {
-  generatedAt: 10, startedAt: 0, initialEquity: 10_000, riskPerTrade: 0.01, maxPositionShare: 0.2, costs: { feeRate: 0.001, slippage: 0.0002 },
+  generatedAt: 10, startedAt: 0, initialEquity: 10_000, riskPerTrade: 0.01, maxPositionShare: 0.2, costs: { feeRate: 0.001, slippage: 0.0002 }, slippageBySymbol: {},
   codeCommit: null, prices: { "BTC/USDT": { price: 102, time: 5 } }, feed: [],
   personas: [
     persona({ id: "s", equity: 9_996, open: [trade] }),
