@@ -1,5 +1,7 @@
 import type { Timeframe, UnixMs } from "@/core/time";
+import { DEFAULT_COSTS, type ExecutionCosts } from "@/modules/backtest";
 import type { MarketSymbol } from "@/modules/market-data";
+import { PERSONAS_ROOT } from "./types";
 
 /**
  * Виртуальные трейдеры: каждый торгует на бумаге по своим правилам на живых
@@ -10,7 +12,7 @@ import type { MarketSymbol } from "@/modules/market-data";
  * Момент старта всех счетов записывается первым циклом в этот файл ветки `data`:
  * персонажи торгуют только вперёд от запуска, без проигрывания истории.
  */
-export const PERSONAS_START_PATH = "personas/start.json";
+export const PERSONAS_START_PATH = `${PERSONAS_ROOT}/start.json`;
 
 export interface PersonasStart {
   startedAt: UnixMs;
@@ -19,9 +21,18 @@ export interface PersonasStart {
 export const INITIAL_EQUITY = 10_000;
 /** Риск на сделку от текущего капитала. */
 export const RISK_PER_TRADE = 0.01;
-/** Номинал одной позиции не больше этой доли капитала: 5 символов × 20% — без плеча. */
-export const MAX_POSITION_SHARE = 0.2;
-export const PERSONA_SYMBOLS: MarketSymbol[] = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT", "XRP/USDT"];
+/** Номинал одной позиции не больше этой доли капитала: 10 символов × 10% — без плеча. */
+export const MAX_POSITION_SHARE = 0.1;
+/** Самые ликвидные пары: стандартное проскальзывание. */
+export const MAJOR_SYMBOLS: MarketSymbol[] = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT", "XRP/USDT"];
+export const PERSONA_SYMBOLS: MarketSymbol[] = [...MAJOR_SYMBOLS, "ADA/USDT", "DOGE/USDT", "TRX/USDT", "LINK/USDT", "AVAX/USDT"];
+/** Проскальзывание остальных монет: объёмы меньше, исполнение хуже. */
+export const MINOR_SLIPPAGE = 0.0005;
+
+/** Издержки по символу: комиссия общая, проскальзывание выше у менее ликвидных монет. */
+export function costsFor(symbol: MarketSymbol): ExecutionCosts {
+  return MAJOR_SYMBOLS.includes(symbol) ? DEFAULT_COSTS : { ...DEFAULT_COSTS, slippage: MINOR_SLIPPAGE };
+}
 
 interface PersonaBase {
   id: string;
@@ -61,9 +72,9 @@ export interface ManagerPersonaDef extends PersonaBase {
 export type PersonaDef = SignalPersonaDef | PortfolioPersonaDef | ManagerPersonaDef;
 
 const RISK_RULE = "Цель — вырастить счёт и не потерять его. Риск 1% капитала на сделку; при просадке от максимума −10% — 0,5%, при −20% — 0,25%.";
-const PROTECTION_RULE = "Защита: за 24 часа потерял больше 3% — новых сделок нет; просадка −30% — пауза на неделю. Открытый риск всех позиций — не больше 3%, позиция — не больше 20% капитала.";
+const PROTECTION_RULE = "Защита: за 24 часа потерял больше 3% — новых сделок нет; просадка −30% — пауза на неделю. Открытый риск всех позиций — не больше 3%, позиция — не больше 10% капитала.";
 const ADAPT_RULE = "Учится на своих сделках: если по монете и направлению последние сделки (3–5) в сумме в минусе, рискует вчетверо меньше, пока не начнёт получаться.";
-const COST_RULE = "Комиссия 0,1% и проскальзывание 0,02% на сторону.";
+const COST_RULE = "Комиссия 0,1% на сторону; проскальзывание 0,02% у BTC, ETH, SOL, BNB, XRP и 0,05% у остальных монет.";
 const WORTH_RULE = "Входит, только если сделка выгодна: до цели хотя бы в 1,5 раза дальше, чем до стопа, и комиссии с проскальзыванием съедают не больше трети прибыли по цели.";
 
 export const PERSONAS: PersonaDef[] = [
@@ -165,7 +176,7 @@ export const PERSONAS: PersonaDef[] = [
     rules: [
       "Каждый понедельник в 03:00 МСК сравнивает рост монет за 28 дней по дневным свечам.",
       "Держит две самые сильные поровну; монету с отрицательным ростом не берёт — эта доля остаётся в долларах.",
-      "Только покупки, без шортов и плеча. Комиссия и проскальзывание — с объёма каждой перестановки.",
+      "Только покупки, без шортов и плеча. Комиссия и проскальзывание — с объёма каждой перестановки (у менее ликвидных монет проскальзывание выше).",
     ],
   },
   {

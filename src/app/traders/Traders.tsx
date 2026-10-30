@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { DISPLAY_TIME_ZONE } from "@/core/time";
 import { DataBranchReader } from "@/services/data-branch";
-import { PERSONAS_STATE_PATH, type FeedEvent, type PersonaSummary, type PersonasSnapshot, type PersonaTrade, type TradeMode } from "@/services/personas/types";
+import { PERSONAS_ROOT, PERSONAS_STATE_PATH, type FeedEvent, type PersonaSummary, type PersonasSnapshot, type PersonaTrade, type TradeMode } from "@/services/personas/types";
 import { fmtNum, fmtPct, fmtPrice, fmtTime } from "../terminal/format";
 import { closedTrades } from "@/services/personas/journal-view";
 import type { PersonaEntry, PersonaExit } from "@/services/personas/signal-trader";
@@ -46,6 +46,15 @@ function useTheme(): string {
 
 const usd = (x: number | null | undefined, signed = false) =>
   x == null || !Number.isFinite(x) ? "—" : `${signed && x > 0 ? "+" : x < 0 ? "−" : ""}$${fmtNum(Math.abs(x), Math.abs(x) >= 1000 ? 0 : 2)}`;
+/** «0,02%» или «0,02–0,05%»: у менее ликвидных монет проскальзывание выше. */
+function slippageRange(s: PersonasSnapshot): string {
+  const values = Object.values(s.slippageBySymbol ?? {});
+  const lo = Math.min(s.costs.slippage, ...values);
+  const hi = Math.max(s.costs.slippage, ...values);
+  const f = (x: number) => fmtPct(x, 2).replace("+", "");
+  return lo === hi ? f(lo) : `${f(lo).replace("%", "")}–${f(hi)}`;
+}
+
 const tone = (x: number | null | undefined) => (x == null || x === 0 ? "" : x > 0 ? "up" : "down");
 
 function ModeTag({ mode }: { mode: TradeMode }) {
@@ -264,8 +273,8 @@ function PersonaDetail({ p, snapshot, names }: { p: PersonaSummary; snapshot: Pe
     try {
       const reader = new DataBranchReader(process.env.NEXT_PUBLIC_DATA_BRANCH_URL || undefined);
       const [entries, exits] = await Promise.all([
-        reader.readJsonl<PersonaEntry>(`personas/${p.id}/entries.jsonl`),
-        reader.readJsonl<PersonaExit>(`personas/${p.id}/exits.jsonl`),
+        reader.readJsonl<PersonaEntry>(`${PERSONAS_ROOT}/${p.id}/entries.jsonl`),
+        reader.readJsonl<PersonaExit>(`${PERSONAS_ROOT}/${p.id}/exits.jsonl`),
       ]);
       setFull({ state: "idle", trades: closedTrades(entries, exits) });
     } catch (e) {
@@ -384,7 +393,7 @@ export function Traders() {
       try {
         const data = await reader.readJson<PersonasSnapshot>(PERSONAS_STATE_PATH, controller.signal);
         if (data) setLoad({ state: "ready", data });
-        else if (first) setLoad({ state: "error", message: "Персонажи ещё не запускались: в ветке data нет personas/state.json." });
+        else if (first) setLoad({ state: "error", message: `Персонажи ещё не запускались: в ветке data нет ${PERSONAS_STATE_PATH}.` });
       } catch (e) {
         if (first && !controller.signal.aborted) setLoad({ state: "error", message: e instanceof Error ? e.message : String(e) });
       }
@@ -451,7 +460,7 @@ export function Traders() {
           : live && "error" in live
             ? <span className="warn">Живые цены недоступны ({live.error}) — показана оценка последнего цикла.</span>
             : null}{" "}
-        Комиссия {fmtPct(s.costs.feeRate, 1).replace("+", "")} и проскальзывание {fmtPct(s.costs.slippage, 2).replace("+", "")} на сторону учтены.
+        Комиссия {fmtPct(s.costs.feeRate, 1).replace("+", "")} и проскальзывание {slippageRange(s)} на сторону учтены.
       </p>
 
       <section aria-label="Рейтинг" className="leaderboard">

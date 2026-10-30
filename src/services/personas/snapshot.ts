@@ -9,6 +9,7 @@ import type { Rebalance } from "./portfolio-trader";
 import { recentBucketR, riskState, type ClosedTrade } from "./risk-manager";
 import {
   INITIAL_EQUITY,
+  costsFor,
   MAX_POSITION_SHARE,
   PERSONA_SYMBOLS,
   PERSONAS,
@@ -65,7 +66,7 @@ function maxDrawdownPct(curve: Curve): number {
   return worst;
 }
 
-const slip = (price: number, side: 1 | -1) => price * (1 + side * DEFAULT_COSTS.slippage);
+const slip = (symbol: MarketSymbol, price: number, side: 1 | -1) => price * (1 + side * costsFor(symbol).slippage);
 
 function base(p: PersonaDef, launchedAt: UnixMs | null, curve: [UnixMs, number][]) {
   const equity = curve.at(-1)![1];
@@ -112,7 +113,7 @@ function signalPersona(
     if (!entryCandle || entryCandle.openTime !== s.basisCloseTime) {
       return { ...common, state: "waiting-entry", entryPrice: null, exitTime: null, exitPrice: null, pnlUsd: null, r: null };
     }
-    const entryPrice = slip(entryCandle.open, sign as 1 | -1);
+    const entryPrice = slip(s.symbol, entryCandle.open, sign as 1 | -1);
     const last = prices.at(s.symbol, until);
     const pnlUsd = last === null ? null : (sign * (last - entryPrice) - DEFAULT_COSTS.feeRate * entryPrice) * e.qty;
     return { ...common, state: "open", entryPrice, exitTime: null, exitPrice: null, pnlUsd, r: pnlUsd === null ? null : pnlUsd / e.riskUsd };
@@ -271,6 +272,7 @@ export function buildPersonasSnapshot(
     riskPerTrade: RISK_PER_TRADE,
     maxPositionShare: MAX_POSITION_SHARE,
     costs: { ...DEFAULT_COSTS },
+    slippageBySymbol: Object.fromEntries([...board.lastCandles.keys()].map((s) => [s, costsFor(s).slippage])),
     codeCommit,
     prices: Object.fromEntries([...board.lastCandles].map(([s, c]) => [s, { price: c.close, time: c.closeTime }])),
     personas: PERSONAS.map((p) => byId.get(p.id)!),
