@@ -1,0 +1,2 @@
+{"signalId":"trend-pullback@0.1.0:BTC/USDT:15m:1793416500000","symbol":"BTC/USDT","direction":"short","createdAt":1793416500000,"reason":"not-worth","drawdown":0,"rewardRisk":2,"costShare":0.3568824290792543,"recordedAt":1793416676914,"mode":"live"}
+{"signalId":"trend-pullback@0.1.0:ETH/USDT:15m:1793416500000","symbol":"ETH/USDT","direction":"short","createdAt":1793416500000,"reason":"not-worth","drawdown":0,"rewardRisk":2,"costShare":0.34752399686624996,"recordedAt":1793416676914,"mode":"live"}
