@@ -165,8 +165,8 @@ function Body({ s, a, liveAt }: { s: PersonasSnapshot; a: AutonomousView; liveAt
                       <td title={k.trusted ? "доверяет деньги" : k.demoted ? "понижен за ошибки" : "только тренируется"}>{k.trusted ? "💰" : k.demoted ? "⬇️" : "🧪"}</td>
                       <td className="wrap">{k.label}</td>
                       <td>{k.trades}</td>
-                      <td className={tone(k.meanR)}>{rr(k.meanR)}</td>
-                      <td className={tone(k.score)}>{rr(k.score)}</td>
+                      <td className={tone(k.meanR)}>{k.trades === 0 ? "—" : rr(k.meanR)}</td>
+                      <td className={tone(k.score)}>{k.trades === 0 ? "—" : rr(k.score)}</td>
                     </tr>
                   ))}
                 </tbody>

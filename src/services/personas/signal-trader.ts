@@ -178,7 +178,7 @@ export function runSignalTrader(opts: {
     const unit = lossPerUnit(s.direction, ref, s.stopLoss, DEFAULT_COSTS.feeRate);
     const qty = Math.min(d.riskUsd / unit, (equity * MAX_POSITION_SHARE) / ref);
     if (!(qty > 0)) continue;
-    const notes = qty * unit < d.riskUsd * 0.999 ? [...d.notes, "урезано лимитом позиции 20% капитала"] : d.notes;
+    const notes = qty * unit < d.riskUsd * 0.999 ? [...d.notes, `урезано лимитом позиции ${Math.round(MAX_POSITION_SHARE * 100)}% капитала`] : d.notes;
     const entry: PersonaEntry = {
       signal: s, qty, riskUsd: qty * unit, equityAtEntry: equity, riskFraction: (qty * unit) / equity, notes,
       recordedAt: now, codeCommit: opts.codeCommit, mode,
