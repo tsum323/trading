@@ -1,8 +1,10 @@
-import { TIMEFRAME_MS, type UnixMs } from "@/core/time";
+import { TIMEFRAME_MS, type Timeframe, type UnixMs } from "@/core/time";
 import { DEFAULT_COSTS } from "@/modules/backtest";
 import type { Candle, MarketDataSourceId, MarketSymbol } from "@/modules/market-data";
 import type { FileArchive } from "@/modules/storage";
 import { getStrategy } from "@/modules/strategies/registry";
+import { buildAutonomousView } from "../autonomous/view";
+import { AUTO_START_PATH, type AutoCursor } from "../autonomous/trader";
 import { closedTrade } from "./journal-view";
 import { managerCurve, type Curve, type ManagerRebalance } from "./manager-trader";
 import type { Rebalance } from "./portfolio-trader";
@@ -14,6 +16,8 @@ import {
   PERSONA_SYMBOLS,
   PERSONAS,
   RISK_PER_TRADE,
+  AUTONOMOUS,
+  type AutonomousPersonaDef,
   type ManagerPersonaDef,
   type PersonaDef,
   type PortfolioPersonaDef,
@@ -68,7 +72,7 @@ function maxDrawdownPct(curve: Curve): number {
 
 const slip = (symbol: MarketSymbol, price: number, side: 1 | -1) => price * (1 + side * costsFor(symbol).slippage);
 
-function base(p: PersonaDef, launchedAt: UnixMs | null, curve: [UnixMs, number][]) {
+function base(p: PersonaDef | AutonomousPersonaDef, launchedAt: UnixMs | null, curve: [UnixMs, number][]) {
   const equity = curve.at(-1)![1];
   return {
     id: p.id, name: p.name, emoji: p.emoji, tagline: p.tagline, rules: p.rules, kind: p.kind,
@@ -77,25 +81,26 @@ function base(p: PersonaDef, launchedAt: UnixMs | null, curve: [UnixMs, number][
   };
 }
 
-function signalPersona(
+export function signalPersona(
   archive: FileArchive,
   sourceId: MarketDataSourceId,
-  persona: SignalPersonaDef,
+  persona: SignalPersonaDef | AutonomousPersonaDef,
   prices: PriceBook,
   start: UnixMs,
   until: UnixMs,
   feed: FeedEvent[],
 ): PersonaSummary {
-  const strategy = getStrategy(persona.strategyKey);
+  // У Автономного нет одной стратегии: таймфрейм и версия — у каждой сделки свои.
+  const strategy = persona.kind === "signals" ? getStrategy(persona.strategyKey) : null;
   const cursor = archive.readJson<PersonaCursor>(personaPath(persona.id, "cursor.json"));
   const entries = archive.readJsonl<PersonaEntry>(personaPath(persona.id, "entries"));
   const exits = new Map(archive.readJsonl<PersonaExit>(personaPath(persona.id, "exits")).map((x) => [x.signalId, x]));
   const skips = archive.readJsonl<PersonaSkip>(personaPath(persona.id, "skips"));
-  const tf = strategy.timeframe;
-  const series = new Map<MarketSymbol, Candle[]>();
-  const candlesOf = (symbol: MarketSymbol) => {
-    if (!series.has(symbol)) series.set(symbol, archive.getCandles(sourceId, { symbol, timeframe: tf, from: start }));
-    return series.get(symbol)!;
+  const series = new Map<string, Candle[]>();
+  const candlesOf = (symbol: MarketSymbol, tf: Timeframe) => {
+    const key = `${symbol}|${tf}`;
+    if (!series.has(key)) series.set(key, archive.getCandles(sourceId, { symbol, timeframe: tf, from: start }));
+    return series.get(key)!;
   };
 
   const trades: PersonaTrade[] = entries.map((e) => {
@@ -108,7 +113,7 @@ function signalPersona(
       stop: s.stopLoss, target: s.takeProfits[0]!, expiresAt: s.expiresAt, qty: e.qty, riskUsd: e.riskUsd,
       riskFraction: e.riskFraction ?? e.riskUsd / e.equityAtEntry, notes: e.notes ?? [], mode: e.mode,
     };
-    const c = candlesOf(s.symbol);
+    const c = candlesOf(s.symbol, s.timeframe);
     const entryCandle = c[lowerBound(c, s.basisCloseTime)];
     if (!entryCandle || entryCandle.openTime !== s.basisCloseTime) {
       return { ...common, state: "waiting-entry", entryPrice: null, exitTime: null, exitPrice: null, pnlUsd: null, r: null };
@@ -156,7 +161,7 @@ function signalPersona(
     : [];
   return {
     ...base(persona, cursor?.launchedAt ?? null, curve),
-    strategyKey: persona.strategyKey, strategyVersion: strategy.version,
+    strategyKey: persona.kind === "signals" ? persona.strategyKey : null, strategyVersion: strategy?.version ?? null,
     closedTrades: closed.length,
     wins: closed.filter((t) => (t.pnlUsd ?? 0) > 0).length,
     losses: closed.filter((t) => (t.pnlUsd ?? 0) <= 0).length,
@@ -253,6 +258,16 @@ export function buildBoard(archive: FileArchive, sourceId: MarketDataSourceId, s
 
 export const curvesOf = (summaries: readonly PersonaSummary[]) => new Map(summaries.map((p) => [p.id, p.curve as Curve]));
 
+/** Отдельный мир Автономного: свой старт, своя лента; в общий рейтинг и ленту не попадает. */
+function autonomousView(archive: FileArchive, sourceId: MarketDataSourceId, board: PersonaBoard, now: UnixMs) {
+  const cursor = archive.readJson<AutoCursor>(AUTO_START_PATH);
+  if (!cursor) return null;
+  const until = Math.max(cursor.startedAt, board.until);
+  const feed: FeedEvent[] = [];
+  const summary = signalPersona(archive, sourceId, AUTONOMOUS, board.prices, cursor.startedAt, until, feed);
+  return buildAutonomousView(archive, summary, feed, now);
+}
+
 /** Сводка для сайта: состояние счетов, кривые капитала и лента действий. Управляющие — по готовым кривым. */
 export function buildPersonasSnapshot(
   archive: FileArchive,
@@ -276,6 +291,7 @@ export function buildPersonasSnapshot(
     codeCommit,
     prices: Object.fromEntries([...board.lastCandles].map(([s, c]) => [s, { price: c.close, time: c.closeTime }])),
     personas: PERSONAS.map((p) => byId.get(p.id)!),
+    autonomous: autonomousView(archive, sourceId, board, now),
     feed: board.feed.sort((a, b) => b.t - a.t).slice(0, MAX_FEED),
   };
 }
