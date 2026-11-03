@@ -38,6 +38,8 @@ async function main() {
         ` | this cycle: +${r.newEntries} entries, +${r.newExits} exits, +${r.newSkips} skips, ${r.rebalances} rebalances`,
     );
   }
+  const a = report.autonomous;
+  console.log(`🦾 Автономный: +${a.shadowSignals} тренировочных сигналов, +${a.newEntries} сделок, +${a.newExits} исходов`);
   console.log(`Snapshot at ${formatDateTime(report.snapshot.generatedAt)} MSK`);
 }
 

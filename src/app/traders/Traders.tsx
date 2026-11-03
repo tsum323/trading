@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { DISPLAY_TIME_ZONE } from "@/core/time";
 import { DataBranchReader } from "@/services/data-branch";
@@ -462,6 +463,17 @@ export function Traders() {
             : null}{" "}
         Комиссия {fmtPct(s.costs.feeRate, 1).replace("+", "")} и проскальзывание {slippageRange(s)} на сторону учтены.
       </p>
+
+      {s.autonomous && (
+        <Link href="/autonomous/" className="panel auto-link">
+          <span className="persona-emoji" aria-hidden="true">{s.autonomous.summary.emoji}</span>
+          <span>
+            <b>{s.autonomous.summary.name}</b> — отдельный мир со своим банком, в рейтинг не входит.{" "}
+            Счёт {usd(s.autonomous.summary.equity)} ({fmtPct(s.autonomous.summary.returnPct)}), сделок {s.autonomous.summary.closedTrades}.
+          </span>
+          <span className="auto-link-go">Смотреть →</span>
+        </Link>
+      )}
 
       <section aria-label="Рейтинг" className="leaderboard">
         {ranked.map((p, i) => (

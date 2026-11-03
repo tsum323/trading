@@ -84,7 +84,7 @@ export interface PersonaSummary {
   emoji: string;
   tagline: string;
   rules: string[];
-  kind: "signals" | "portfolio" | "manager";
+  kind: "signals" | "portfolio" | "manager" | "autonomous";
   timeframe: Timeframe;
   symbols: MarketSymbol[];
   /** Ключ стратегии в реестре (для персонажей на сигналах). */
@@ -132,6 +132,52 @@ export interface PersonasSnapshot {
   /** Последняя закрытая часовая свеча по символу. */
   prices: Record<MarketSymbol, { price: number; time: UnixMs }>;
   personas: PersonaSummary[];
+  feed: FeedEvent[];
+  /** 🦾 Автономный — отдельный мир, не входит в общий рейтинг. */
+  autonomous: AutonomousView | null;
+}
+
+export interface AutonomousSkillView {
+  id: string;
+  label: string;
+  timeframe: Timeframe;
+  /** Тренировочных сделок с результатом и простое среднее R. */
+  trades: number;
+  meanR: number;
+  /** Оценка для решений (свежие сделки важнее, сжата к нулю). */
+  score: number;
+  trusted: boolean;
+  demoted: boolean;
+}
+
+export interface AutonomousLessonView {
+  id: string;
+  title: string;
+  rule: string;
+  status: "active" | "confirmed" | "revoked";
+  since: UnixMs;
+  evidence: string;
+  /** Сделок, которые урок отсёк. */
+  blocked: number;
+}
+
+export interface AutonomousDiaryView {
+  t: UnixMs;
+  kind: string;
+  text: string;
+}
+
+export interface AutonomousView {
+  summary: PersonaSummary;
+  startedAt: UnixMs;
+  shadowFrom: UnixMs;
+  skills: AutonomousSkillView[];
+  lessons: AutonomousLessonView[];
+  /** Причины убытков по разборам: ключ — причина, значение — сколько раз. */
+  reasons: Record<string, number>;
+  postmortems: number;
+  diary: AutonomousDiaryView[];
+  /** Сделки бота: входы, выходы, пропуски. */
   feed: FeedEvent[];
 }
 

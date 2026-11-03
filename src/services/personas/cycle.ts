@@ -3,6 +3,7 @@ import type { Gap, MarketDataSource, MarketSymbol } from "@/modules/market-data"
 import type { FileArchive } from "@/modules/storage";
 import { FactorArchive, ingestFactors, type FactorIngestReport, type VisionDeps } from "@/modules/derivatives/vision";
 import { FACTOR_STRATEGY_IDS, getStrategy, type StrategyDeps } from "@/modules/strategies/registry";
+import { runAutonomousCycle } from "../autonomous/cycle";
 import { ingestHistory } from "../ingest-history";
 import { runManagerTrader } from "./manager-trader";
 import { runPortfolioTrader } from "./portfolio-trader";
@@ -20,6 +21,7 @@ export interface PersonasCycleReport {
   ingest: { symbol: MarketSymbol; timeframe: Timeframe; received: number; gaps: Gap[] }[];
   personas: { id: string; newEntries: number; newExits: number; newSkips: number; rebalances: number }[];
   factors: FactorIngestReport[];
+  autonomous: { newEntries: number; newExits: number; shadowSignals: number };
   snapshot: PersonasSnapshot;
 }
 
@@ -117,7 +119,10 @@ export async function runPersonasCycle(opts: {
     personas.push({ id: p.id, newEntries: 0, newExits: 0, newSkips: 0, rebalances: r.length });
   }
 
+  // 🦾 Автономный — отдельный мир со своим стартом; общие с остальными только рыночные данные.
+  const autonomous = await runAutonomousCycle({ source, archive, factors: deps.factors ?? new Map(), now, codeCommit, ...(opts.sleep ? { sleep: opts.sleep } : {}) });
+
   const snapshot = buildPersonasSnapshot(archive, source.id, start, now(), codeCommit);
   archive.writeText(PERSONAS_STATE_PATH, `${JSON.stringify(snapshot)}\n`);
-  return { ingest, personas, factors, snapshot };
+  return { ingest, personas, factors, autonomous, snapshot };
 }

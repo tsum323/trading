@@ -219,3 +219,17 @@ td.wrap { white-space: normal; min-width: 220px; font-family: var(--font-sans); 
 }
 @keyframes live-pulse { 50% { opacity: 0.35; } }
 @media (prefers-reduced-motion: reduce) { .live-dot::before { animation: none; } }
+
+/* Автономный */
+.auto-hero { display: grid; gap: 12px; }
+.auto-title { display: flex; gap: 12px; align-items: center; }
+.auto-title h2 { margin: 0; font-size: 20px; }
+.auto-title .persona-emoji { font-size: 40px; }
+.diary-text { font-weight: 400; }
+.lessons { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.lesson { padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; }
+.lesson-revoked { opacity: 0.7; }
+.auto-link { display: flex; gap: 12px; align-items: center; color: var(--text); text-decoration: none; }
+.auto-link:hover { border-color: var(--accent); }
+.auto-link .persona-emoji { font-size: 28px; }
+.auto-link-go { margin-left: auto; color: var(--accent); white-space: nowrap; }
