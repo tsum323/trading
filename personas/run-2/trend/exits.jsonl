@@ -1,0 +1,1 @@
+{"signalId":"donchian-breakout@0.1.0+timeframe=4h:SOL/USDT:4h:1793649600000","evaluatedAt":1793808000000,"evaluatorVersion":"1","status":"stop","entryTime":1793649600000,"entryPrice":91.74164800000001,"exitTime":1793808000000,"exitPrice":95.0720673221289,"rMultiple":-1.0054398271607625,"mfeR":0.5378898184319565,"maeR":-0.9466026749950387,"pnlUsd":-38.32661041136557}
