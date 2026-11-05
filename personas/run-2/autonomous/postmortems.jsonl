@@ -1,0 +1,1 @@
+{"signalId":"mean-reversion@0.1.0+bandWidth=2.5,rsiLow=25,rsiHigh=75:ETH/USDT:1h:1793804400000","skillId":"reversion-1h-deep","symbol":"ETH/USDT","direction":"short","r":-1.0131342392835463,"reasons":["instant"],"at":1793890990313}
