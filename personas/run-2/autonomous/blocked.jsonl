@@ -11,3 +11,4 @@
 {"signalId":"mean-reversion@0.1.0+timeframe=4h,expiryBars=12:ETH/USDT:4h:1794182400000","skillId":"reversion-4h","lesson":"trend-filter","at":1794182400000}
 {"signalId":"mean-reversion@0.1.0+timeframe=4h,expiryBars=12:XRP/USDT:4h:1794182400000","skillId":"reversion-4h","lesson":"trend-filter","at":1794182400000}
 {"signalId":"mean-reversion@0.1.0+bandWidth=2.5,rsiLow=25,rsiHigh=75:TRX/USDT:1h:1794207600000","skillId":"reversion-1h-deep","lesson":"trend-filter","at":1794207600000}
+{"signalId":"mean-reversion@0.1.0+timeframe=4h,expiryBars=12:ADA/USDT:4h:1794211200000","skillId":"reversion-4h","lesson":"trend-filter","at":1794211200000}
