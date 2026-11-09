@@ -3,7 +3,8 @@
   "launchedAt": 1793712778609,
   "trusted": [
     "reversion-1h-deep",
-    "reversion-4h"
+    "reversion-4h",
+    "reversion-1h"
   ],
   "lastDay": "2026-11-10"
 }
