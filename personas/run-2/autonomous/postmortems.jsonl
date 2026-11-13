@@ -12,3 +12,5 @@
 {"signalId":"mean-reversion@0.1.0:DOGE/USDT:1h:1794492000000","skillId":"reversion-1h","symbol":"DOGE/USDT","direction":"long","r":-1.026478603047644,"reasons":["against-trend"],"at":1794578575692}
 {"signalId":"mean-reversion@0.1.0:ETH/USDT:1h:1794492000000","skillId":"reversion-1h","symbol":"ETH/USDT","direction":"long","r":-1.0135202274053041,"reasons":["against-trend","instant"],"at":1794578575692}
 {"signalId":"mean-reversion@0.1.0:SOL/USDT:1h:1794492000000","skillId":"reversion-1h","symbol":"SOL/USDT","direction":"long","r":-1.0116283210287038,"reasons":["against-trend"],"at":1794578575692}
+{"signalId":"mean-reversion@0.1.0:BTC/USDT:1h:1794495600000","skillId":"reversion-1h","symbol":"BTC/USDT","direction":"long","r":-1.015960177408476,"reasons":["against-trend"],"at":1794582193853}
+{"signalId":"mean-reversion@0.1.0:ETH/USDT:1h:1794495600000","skillId":"reversion-1h","symbol":"ETH/USDT","direction":"long","r":-1.0127031131776172,"reasons":["against-trend"],"at":1794582193853}
