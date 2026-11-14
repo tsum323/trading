@@ -14,3 +14,4 @@
 {"signalId":"mean-reversion@0.1.0:SOL/USDT:1h:1794492000000","skillId":"reversion-1h","symbol":"SOL/USDT","direction":"long","r":-1.0116283210287038,"reasons":["against-trend"],"at":1794578575692}
 {"signalId":"mean-reversion@0.1.0:BTC/USDT:1h:1794495600000","skillId":"reversion-1h","symbol":"BTC/USDT","direction":"long","r":-1.015960177408476,"reasons":["against-trend"],"at":1794582193853}
 {"signalId":"mean-reversion@0.1.0:ETH/USDT:1h:1794495600000","skillId":"reversion-1h","symbol":"ETH/USDT","direction":"long","r":-1.0127031131776172,"reasons":["against-trend"],"at":1794582193853}
+{"signalId":"mean-reversion@0.1.0+bandWidth=2.5,rsiLow=25,rsiHigh=75:BNB/USDT:1h:1794542400000","skillId":"reversion-1h-deep","symbol":"BNB/USDT","direction":"long","r":-1.012807763972916,"reasons":["against-trend","instant"],"at":1794628978909}

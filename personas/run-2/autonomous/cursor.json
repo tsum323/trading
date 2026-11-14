@@ -2,9 +2,10 @@
   "startedAt": 1793712600000,
   "launchedAt": 1793712778609,
   "trusted": [
-    "reversion-1h-deep",
     "breakout-4h-oi",
-    "crowding-4h"
+    "reversion-1h-deep",
+    "breakout-4h-wide",
+    "breakout-4h-96"
   ],
   "lastDay": "2026-11-14"
 }
