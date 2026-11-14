@@ -4,8 +4,8 @@
   "trusted": [
     "breakout-4h-oi",
     "breakout-4h-wide",
-    "reversion-1h-deep",
     "breakout-4h-96",
+    "reversion-1h-deep",
     "breakout-4h-24"
   ],
   "lastDay": "2026-11-15"
