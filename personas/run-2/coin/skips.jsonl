@@ -2,3 +2,4 @@
 {"signalId":"random-entry@0.1.0:BTC/USDT:4h:1794931200000","symbol":"BTC/USDT","direction":"short","createdAt":1794931200000,"reason":"risk-cap","drawdown":-0.005940462406465508,"recordedAt":1794931404530,"mode":"live"}
 {"signalId":"random-entry@0.1.0:BTC/USDT:4h:1794945600000","symbol":"BTC/USDT","direction":"long","createdAt":1794945600000,"reason":"risk-cap","drawdown":-0.005940462406465508,"recordedAt":1794945795749,"mode":"live"}
 {"signalId":"random-entry@0.1.0:TRX/USDT:4h:1794960000000","symbol":"TRX/USDT","direction":"long","createdAt":1794960000000,"reason":"risk-cap","drawdown":-0.005940462406465508,"recordedAt":1794960189056,"mode":"live"}
+{"signalId":"random-entry@0.1.0:TRX/USDT:4h:1794974400000","symbol":"TRX/USDT","direction":"long","createdAt":1794974400000,"reason":"risk-cap","drawdown":-0.005940462406465508,"recordedAt":1794974612144,"mode":"live"}
