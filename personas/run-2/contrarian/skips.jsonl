@@ -39,3 +39,4 @@
 {"signalId":"mean-reversion@0.1.0:SOL/USDT:1h:1794697200000","symbol":"SOL/USDT","direction":"long","createdAt":1794697200000,"reason":"daily-stop","drawdown":-0.05036252410681308,"recordedAt":1794697395272,"mode":"live"}
 {"signalId":"mean-reversion@0.1.0:XRP/USDT:1h:1794697200000","symbol":"XRP/USDT","direction":"long","createdAt":1794697200000,"reason":"daily-stop","drawdown":-0.05036252410681308,"recordedAt":1794697395272,"mode":"live"}
 {"signalId":"mean-reversion@0.1.0:BTC/USDT:1h:1794708000000","symbol":"BTC/USDT","direction":"long","createdAt":1794708000000,"reason":"daily-stop","drawdown":-0.05036252410681308,"recordedAt":1794708183491,"mode":"live"}
+{"signalId":"mean-reversion@0.1.0:TRX/USDT:1h:1795050000000","symbol":"TRX/USDT","direction":"short","createdAt":1795050000000,"reason":"not-worth","drawdown":0,"rewardRisk":1.3283950502177508,"costShare":0.44342857142854986,"recordedAt":1795050185145,"mode":"live"}
