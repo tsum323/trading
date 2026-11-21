@@ -8,3 +8,6 @@
 {"signalId":"donchian-breakout@0.1.0+timeframe=4h:SOL/USDT:4h:1794700800000","symbol":"SOL/USDT","direction":"short","createdAt":1794700800000,"reason":"risk-cap","drawdown":0,"recordedAt":1794700991915,"mode":"live"}
 {"signalId":"donchian-breakout@0.1.0+timeframe=4h:XRP/USDT:4h:1794700800000","symbol":"XRP/USDT","direction":"short","createdAt":1794700800000,"reason":"risk-cap","drawdown":0,"recordedAt":1794700991915,"mode":"live"}
 {"signalId":"donchian-breakout@0.1.0+timeframe=4h:TRX/USDT:4h:1795204800000","symbol":"TRX/USDT","direction":"short","createdAt":1795204800000,"reason":"risk-cap","drawdown":0,"recordedAt":1795205004185,"mode":"live"}
+{"signalId":"donchian-breakout@0.1.0+timeframe=4h:SOL/USDT:4h:1795233600000","symbol":"SOL/USDT","direction":"short","createdAt":1795233600000,"reason":"risk-cap","drawdown":0,"recordedAt":1795233803575,"mode":"live"}
+{"signalId":"donchian-breakout@0.1.0+timeframe=4h:TRX/USDT:4h:1795233600000","symbol":"TRX/USDT","direction":"short","createdAt":1795233600000,"reason":"risk-cap","drawdown":0,"recordedAt":1795233803575,"mode":"live"}
+{"signalId":"donchian-breakout@0.1.0+timeframe=4h:XRP/USDT:4h:1795233600000","symbol":"XRP/USDT","direction":"short","createdAt":1795233600000,"reason":"risk-cap","drawdown":0,"recordedAt":1795233803575,"mode":"live"}

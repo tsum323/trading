@@ -3,9 +3,9 @@
   "launchedAt": 1793712778609,
   "trusted": [
     "breakout-4h-96",
-    "breakout-4h-wide",
-    "breakout-4h-48",
     "breakout-4h-oi",
+    "breakout-4h-48",
+    "breakout-4h-wide",
     "breakout-4h-24"
   ],
   "lastDay": "2026-11-21"
