@@ -2,8 +2,8 @@
   "startedAt": 1793712600000,
   "launchedAt": 1793712778609,
   "trusted": [
-    "breakout-4h-96",
     "breakout-4h-wide",
+    "breakout-4h-96",
     "breakout-4h-oi",
     "breakout-4h-48",
     "breakout-4h-24"
