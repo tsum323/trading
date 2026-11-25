@@ -44,3 +44,4 @@
 {"signalId":"mean-reversion@0.1.0:BTC/USDT:1h:1795233600000","symbol":"BTC/USDT","direction":"long","createdAt":1795233600000,"reason":"daily-stop","drawdown":-0.07692720317092916,"recordedAt":1795233803807,"mode":"live"}
 {"signalId":"mean-reversion@0.1.0:SOL/USDT:1h:1795233600000","symbol":"SOL/USDT","direction":"long","createdAt":1795233600000,"reason":"daily-stop","drawdown":-0.07692720317092916,"recordedAt":1795233803807,"mode":"live"}
 {"signalId":"mean-reversion@0.1.0:AVAX/USDT:1h:1795240800000","symbol":"AVAX/USDT","direction":"long","createdAt":1795240800000,"reason":"daily-stop","drawdown":-0.07692720317092916,"recordedAt":1795241003625,"mode":"live"}
+{"signalId":"mean-reversion@0.1.0:TRX/USDT:1h:1795615200000","symbol":"TRX/USDT","direction":"long","createdAt":1795615200000,"reason":"not-worth","drawdown":0,"rewardRisk":1.6909512217121065,"costShare":0.38279551122195976,"recordedAt":1795615394220,"mode":"live"}
