@@ -12,3 +12,4 @@
 {"signalId":"random-entry@0.1.0:XRP/USDT:4h:1795622400000","symbol":"XRP/USDT","direction":"short","createdAt":1795622400000,"reason":"risk-cap","drawdown":-0.036312010920818816,"recordedAt":1795624397755,"mode":"live"}
 {"signalId":"random-entry@0.1.0:BNB/USDT:4h:1795737600000","symbol":"BNB/USDT","direction":"long","createdAt":1795737600000,"reason":"risk-cap","drawdown":-0.036312010920818816,"recordedAt":1795737802327,"mode":"live"}
 {"signalId":"random-entry@0.1.0:XRP/USDT:4h:1795780800000","symbol":"XRP/USDT","direction":"long","createdAt":1795780800000,"reason":"risk-cap","drawdown":-0.036312010920818816,"recordedAt":1795781004792,"mode":"live"}
+{"signalId":"random-entry@0.1.0:BTC/USDT:4h:1795838400000","symbol":"BTC/USDT","direction":"long","createdAt":1795838400000,"reason":"risk-cap","drawdown":-0.036312010920818816,"recordedAt":1795838602977,"mode":"live"}
